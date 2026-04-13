@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TICK.IT - Sign Up</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='register.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <!-- NAVBAR -->
+    <nav class="navbar" style="position:relative;">
+        <div class="logo">TICK.<span>IT</span></div>
+        <!-- Centered nav buttons -->
+        <div style="position:absolute;left:50%;transform:translateX(-50%);display:flex;gap:10px;align-items:center;">
+            <a href="/movies"  class="nav-btn">Movies</a>
+            <a href="/home"    class="nav-btn">Home</a>
+            <a href="/booking" class="nav-btn">Booking</a>
+        </div>
+        <!-- Right: Sign In / Sign Up -->
+        <div class="nav-auth-links" style="margin-left:auto;">
+            <a href="/login"    class="nav-auth-btn">Sign In</a>
+            <a href="/register" class="nav-auth-btn active">Sign Up</a>
+        </div>
+    </nav>
+
+    <!-- MAIN -->
+    <main class="main-bg">
+        <div class="bg-overlay"></div>
+
+        <div class="content-row">
+            <!-- LEFT CARD -->
+            <div class="left-card">
+                <h1 class="signup-title">Enter your info to Sign up</h1>
+                <p class="signup-sub">Let's get started</p>
+                <p class="signup-desc">
+                    Create your first account and make your ticket bookings easier
+                    to enjoy watching movies in cinema.
+                </p>
+                <h2 class="book-title">Book Online Now!</h2>
+            </div>
+
+            <!-- RIGHT CARD (Form) -->
+            <div class="right-card">
+                {% if errors.general %}
+                    <div class="alert alert-error">{{ errors.general }}</div>
+                {% endif %}
+
+                <form method="POST" action="/register" novalidate>
+                    <div class="field-group">
+                        <input type="text" name="identifier"
+                            class="form-input {% if errors.identifier %}input-error{% endif %}"
+                            placeholder="Email or mobile number *"
+                            value="{{ form.identifier or '' }}">
+                        {% if errors.identifier %}<span class="error-msg">{{ errors.identifier }}</span>{% endif %}
+                    </div>
+
+                    <div class="field-group">
+                        <input type="text" name="full_name"
+                            class="form-input {% if errors.full_name %}input-error{% endif %}"
+                            placeholder="Full Name *"
+                            value="{{ form.full_name or '' }}">
+                        {% if errors.full_name %}<span class="error-msg">{{ errors.full_name }}</span>{% endif %}
+                    </div>
+
+                    <div class="field-group">
+                        <input type="number" name="age"
+                            class="form-input {% if errors.age %}input-error{% endif %}"
+                            placeholder="Age *" min="1" max="120"
+                            value="{{ form.age or '' }}">
+                        {% if errors.age %}<span class="error-msg">{{ errors.age }}</span>{% endif %}
+                    </div>
+
+                    <div class="field-group">
+                        <select name="gender" class="form-input form-select {% if errors.gender %}input-error{% endif %}">
+                            <option value="" disabled {% if not form.gender %}selected{% endif %}>Select Gender *</option>
+                            <option value="Male"              {% if form.gender == 'Male' %}selected{% endif %}>Male</option>
+                            <option value="Female"            {% if form.gender == 'Female' %}selected{% endif %}>Female</option>
+                            <option value="Non-binary"        {% if form.gender == 'Non-binary' %}selected{% endif %}>Non-binary</option>
+                            <option value="Prefer not to say" {% if form.gender == 'Prefer not to say' %}selected{% endif %}>Prefer not to say</option>
+                        </select>
+                        {% if errors.gender %}<span class="error-msg">{{ errors.gender }}</span>{% endif %}
+                    </div>
+
+                    <div class="field-group">
+                        <select name="province" id="province" class="form-input form-select {% if errors.province %}input-error{% endif %}" onchange="loadCities()">
+                            <option value="" disabled {% if not form.province %}selected{% endif %}>Select Province *</option>
+                        </select>
+                        {% if errors.province %}<span class="error-msg">{{ errors.province }}</span>{% endif %}
+                    </div>
+
+                    <div class="field-group">
+                        <select name="city" id="city" class="form-input form-select {% if errors.city %}input-error{% endif %}" onchange="loadBarangays()" disabled>
+                            <option value="" disabled selected>Select City / Municipality *</option>
+                        </select>
+                        {% if errors.city %}<span class="error-msg">{{ errors.city }}</span>{% endif %}
+                    </div>
+
+                    <div class="field-group">
+                        <select name="barangay" id="barangay" class="form-input form-select {% if errors.barangay %}input-error{% endif %}" disabled>
+                            <option value="" disabled selected>Select Barangay *</option>
+                        </select>
+                        {% if errors.barangay %}<span class="error-msg">{{ errors.barangay }}</span>{% endif %}
+                    </div>
+
+                    <div class="field-group password-group">
+                        <input type="password" name="password" id="regPassword"
+                            class="form-input {% if errors.password %}input-error{% endif %}"
+                            placeholder="Password * (min 6 chars, letters+numbers)">
+                        <button type="button" class="eye-btn" onclick="togglePw('regPassword', this)">&#128065;</button>
+                        {% if errors.password %}<span class="error-msg">{{ errors.password }}</span>{% endif %}
+                    </div>
+
+                    <div class="field-group password-group">
+                        <input type="password" name="confirm_password" id="regConfirm"
+                            class="form-input {% if errors.confirm_password %}input-error{% endif %}"
+                            placeholder="Confirm Password *">
+                        <button type="button" class="eye-btn" onclick="togglePw('regConfirm', this)">&#128065;</button>
+                        {% if errors.confirm_password %}<span class="error-msg">{{ errors.confirm_password }}</span>{% endif %}
+                    </div>
+
+                    <button type="submit" class="signup-btn">Sign up</button>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <div class="footer-bar">
+        <p class="footer-text">&#169; All rights reserved</p>
+    </div>
+
+    <script>
+        function togglePw(id, btn) {
+            const inp = document.getElementById(id);
+            inp.type = inp.type === 'password' ? 'text' : 'password';
+            btn.innerHTML = inp.type === 'password' ? '&#128065;' : '&#128064;';
+        }
+
+        const BASE = 'https://psgc.gitlab.io/api';
+        const selProvince = document.getElementById('province');
+        const selCity     = document.getElementById('city');
+        const selBarangay = document.getElementById('barangay');
+        const savedProvince = "{{ form.province or '' }}";
+        const savedCity     = "{{ form.city or '' }}";
+        const savedBarangay = "{{ form.barangay or '' }}";
+
+        fetch(`${BASE}/provinces/`)
+            .then(r => r.json())
+            .then(data => {
+                data.sort((a,b) => a.name.localeCompare(b.name));
+                data.forEach(p => {
+                    const o = new Option(p.name, p.name);
+                    if (p.name === savedProvince) o.selected = true;
+                    selProvince.add(o);
+                });
+                if (savedProvince) loadCities(savedCity);
+            })
+            .catch(() => {
+                ['Cebu','Metro Manila','Davao del Sur','Laguna','Batangas','Pampanga','Bulacan','Rizal','Iloilo','Negros Occidental'].forEach(name => {
+                    selProvince.add(new Option(name, name));
+                });
+            });
+
+        function loadCities(preselectCity = '') {
+            const province = selProvince.value;
+            if (!province) return;
+            selCity.innerHTML = '<option value="" disabled selected>Loading...</option>';
+            selCity.disabled = true;
+            selBarangay.innerHTML = '<option value="" disabled selected>Select Barangay *</option>';
+            selBarangay.disabled = true;
+            fetch(`${BASE}/provinces/`)
+                .then(r => r.json())
+                .then(provinces => {
+                    const found = provinces.find(p => p.name === province);
+                    if (!found) throw new Error();
+                    return fetch(`${BASE}/provinces/${found.code}/cities-municipalities/`);
+                })
+                .then(r => r.json())
+                .then(data => {
+                    data.sort((a,b) => a.name.localeCompare(b.name));
+                    selCity.innerHTML = '<option value="" disabled selected>Select City / Municipality *</option>';
+                    data.forEach(c => {
+                        const o = new Option(c.name, c.name);
+                        o.dataset.code = c.code;
+                        if (c.name === preselectCity) o.selected = true;
+                        selCity.add(o);
+                    });
+                    selCity.disabled = false;
+                    if (preselectCity) loadBarangays(savedBarangay);
+                })
+                .catch(() => { selCity.innerHTML = '<option value="" disabled selected>Could not load cities</option>'; selCity.disabled = false; });
+        }
+
+        function loadBarangays(preselectBarangay = '') {
+            const cityOpt = selCity.options[selCity.selectedIndex];
+            if (!cityOpt || !cityOpt.dataset.code) return;
+            selBarangay.innerHTML = '<option value="" disabled selected>Loading...</option>';
+            selBarangay.disabled = true;
+            fetch(`${BASE}/cities-municipalities/${cityOpt.dataset.code}/barangays/`)
+                .then(r => r.json())
+                .then(data => {
+                    data.sort((a,b) => a.name.localeCompare(b.name));
+                    selBarangay.innerHTML = '<option value="" disabled selected>Select Barangay *</option>';
+                    data.forEach(b => {
+                        const o = new Option(b.name, b.name);
+                        if (b.name === preselectBarangay) o.selected = true;
+                        selBarangay.add(o);
+                    });
+                    selBarangay.disabled = false;
+                })
+                .catch(() => { selBarangay.innerHTML = '<option value="" disabled selected>Could not load barangays</option>'; selBarangay.disabled = false; });
+        }
+    </script>
+</body>
+</html>

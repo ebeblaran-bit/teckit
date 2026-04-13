@@ -1,0 +1,300 @@
+/* ============================
+   RESET & BASE
+   ============================ */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #000;
+    color: #fff;
+    overflow-x: hidden;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ============================
+   NAVBAR
+   ============================ */
+.navbar {
+    width: 100%;
+    background-color: #111;
+    border-bottom: 2px solid #300000;
+    padding: 0 32px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-shrink: 0;
+}
+
+.logo {
+    font-weight: 700;
+    font-size: 1.8rem;
+    color: #fff;
+    letter-spacing: 2px;
+    flex-shrink: 0;
+}
+
+.logo span {
+    color: #cc0000;
+}
+
+.nav-buttons {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 130px;
+    height: 40px;
+    background: #D9D9D9;
+    border-radius: 221px;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 18px;
+    color: #000;
+    transition: background 0.2s, color 0.2s;
+    white-space: nowrap;
+}
+
+.nav-btn:hover {
+    background: #cc0000;
+    color: #fff;
+}
+
+/* ============================
+   MAIN BACKGROUND
+   ============================ */
+.main-bg {
+    flex: 1;
+    position: relative;
+    background-image: url('/static/images/red_texture.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 50px 20px;
+    min-height: 600px;
+}
+
+.bg-overlay {
+    position: absolute;
+    inset: 0;
+    background: #000;
+    opacity: 0.18;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* ============================
+   LOGIN CARD
+   ============================ */
+.login-card {
+    position: relative;
+    z-index: 2;
+    width: 500px;
+    background: rgba(0, 0, 0, 0.73);
+    border-radius: 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 44px;
+    gap: 0;
+}
+
+.login-title {
+    font-weight: 700;
+    font-size: 26px;
+    line-height: 1.3;
+    text-align: center;
+    color: #fff;
+    margin-bottom: 8px;
+}
+
+.login-sub {
+    font-weight: 400;
+    font-size: 15px;
+    text-align: center;
+    color: #fff;
+    margin-bottom: 24px;
+}
+
+.new-account-link {
+    color: #fff;
+    text-decoration: underline;
+}
+
+.new-account-link:hover {
+    color: #ff6666;
+}
+
+.input-group {
+    width: 100%;
+    margin-bottom: 14px;
+}
+
+.login-input {
+    width: 100%;
+    height: 54px;
+    background: rgba(0, 0, 0, 0.73);
+    border: 2px solid #fff;
+    border-radius: 10px;
+    font-weight: 400;
+    font-size: 15px;
+    color: #fff;
+    padding: 0 18px;
+    outline: none;
+    display: block;
+    transition: border-color 0.2s;
+}
+
+.login-input::placeholder {
+    color: rgba(255, 255, 255, 0.65);
+}
+
+.login-input:focus {
+    border-color: #cc0000;
+    background: rgba(0, 0, 0, 0.85);
+}
+
+.continue-btn {
+    width: 100%;
+    height: 54px;
+    background: #CE0000;
+    border-radius: 10px;
+    border: none;
+    font-weight: 700;
+    font-size: 18px;
+    color: #fff;
+    cursor: pointer;
+    margin-top: 6px;
+    transition: background 0.2s;
+}
+
+.continue-btn:hover {
+    background: #ff0000;
+}
+
+/* ============================
+   FOOTER BAR
+   ============================ */
+.footer-bar {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.49);
+    height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.footer-text {
+    font-weight: 700;
+    font-size: 16px;
+    color: #fff;
+}
+
+/* ============================
+   RESPONSIVE
+   ============================ */
+@media (max-width: 600px) {
+    .login-card {
+        width: 95vw;
+        padding: 30px 20px;
+        border-radius: 24px;
+    }
+    .navbar {
+        flex-wrap: wrap;
+        height: auto;
+        padding: 12px 16px;
+    }
+    .nav-btn { width: 90px; font-size: 14px; height: 36px; }
+}
+
+/* ============================
+   VALIDATION & ALERTS
+   ============================ */
+.alert {
+    width: 100%;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    text-align: center;
+}
+.alert-success { background: rgba(0,180,0,0.25); border: 1px solid #00b400; color: #7fff7f; }
+.alert-error   { background: rgba(200,0,0,0.25); border: 1px solid #cc0000; color: #ff9999; }
+
+.input-error { border-color: #ff4444 !important; }
+
+.error-msg {
+    display: block;
+    color: #ff6666;
+    font-size: 12px;
+    margin-top: 4px;
+    padding-left: 4px;
+}
+
+/* Password show/hide */
+.password-group {
+    position: relative;
+}
+.eye-btn {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    color: #fff;
+    padding: 0;
+    line-height: 1;
+}
+.password-group .error-msg {
+    position: static;
+    transform: none;
+}
+
+.alert-warning { background: rgba(180,120,0,0.25); border: 1px solid #cc8800; color: #ffd966; }
+.alert-info    { background: rgba(0,80,180,0.25);  border: 1px solid #0055cc; color: #99ccff; }
+/* Consistent navbar additions */
+.navbar {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    height: 70px;
+    gap: 14px;
+}
+.nav-btn { width: 108px; height: 36px; font-size: 14px; }
+.nav-spacer { flex: 1; }
+.nav-auth-links { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+.nav-auth-btn {
+    display: flex; align-items: center; justify-content: center;
+    height: 34px; padding: 0 18px;
+    background: rgba(217,217,217,0.15);
+    border: 2px solid rgba(255,255,255,0.25);
+    border-radius: 221px;
+    text-decoration: none; font-weight: 700; font-size: 13px; color: #fff;
+    transition: all 0.2s;
+}
+.nav-auth-btn:hover { background: rgba(204,0,0,0.4); border-color: #cc0000; }
+.nav-auth-btn.active { background: #cc0000; border-color: #cc0000; }
+.forgot-row { text-align: right; margin-bottom: 10px; }
+.forgot-link { font-size: 12px; color: #aaa; text-decoration: underline; }
+.forgot-link:hover { color: #fff; }

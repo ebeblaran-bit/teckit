@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TICK.IT — Admin Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="admin-header">
+    <div class="admin-logo">TICK.<span>IT</span></div>
+    <div class="admin-title-bar">Admin Dashboard</div>
+    <div class="admin-header-right">
+        <span style="font-size:13px;color:#888;">Admin</span>
+        <a href="/admin/logout" class="admin-logout-btn">Logout</a>
+    </div>
+</header>
+
+<div class="admin-body">
+    <!-- SIDEBAR -->
+    <nav class="admin-sidebar">
+        <span class="sidebar-label">Main</span>
+        <a href="/admin" class="sidebar-link active">
+            <span class="sidebar-icon">📊</span><span>Dashboard</span>
+        </a>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-label">Manage</span>
+        <a href="/admin/movies" class="sidebar-link">
+            <span class="sidebar-icon">🎬</span><span>Movies</span>
+        </a>
+        <a href="/admin/bookings" class="sidebar-link">
+            <span class="sidebar-icon">🎟️</span><span>Bookings</span>
+        </a>
+        <a href="/admin/halls" class="sidebar-link">
+            <span class="sidebar-icon">🏛️</span><span>Halls</span>
+        </a>
+        <a href="/admin/verifications" class="sidebar-link">
+            <span class="sidebar-icon">🪪</span><span>Verifications</span>
+        </a>
+        <a href="/admin/payments" class="sidebar-link">
+            <span class="sidebar-icon">💳</span><span>Payments</span>
+        </a>
+        <a href="/admin/users" class="sidebar-link">
+            <span class="sidebar-icon">👥</span><span>Users</span>
+        </a>
+        <div class="sidebar-divider"></div>
+        <a href="/home" class="sidebar-link">
+            <span class="sidebar-icon">🏠</span><span>Main Site</span>
+        </a>
+
+    </nav>
+
+    <!-- MAIN -->
+    <main class="admin-main">
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for cat, msg in messages %}
+                <div class="alert alert-{{ cat }}">{{ msg }}</div>
+            {% endfor %}
+        {% endwith %}
+
+        <div class="page-heading">📊 Overview</div>
+
+        <!-- STAT CARDS -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">💺</div>
+                <div class="stat-label">Available Seats</div>
+                <div class="stat-value">{{ stats.available_seats }}</div>
+                <div class="stat-sub">Across all open showings</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">💰</div>
+                <div class="stat-label">Total Sales</div>
+                <div class="stat-value">₱{{ "{:,.0f}".format(stats.total_sales) }}</div>
+                <div class="stat-sub">All confirmed bookings</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">🎟️</div>
+                <div class="stat-label">Total Bookings</div>
+                <div class="stat-value">{{ stats.total_bookings }}</div>
+                <div class="stat-sub">{{ stats.confirmed_bookings }} confirmed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">🎬</div>
+                <div class="stat-label">Active Movies</div>
+                <div class="stat-value">{{ stats.active_movies }}</div>
+                <div class="stat-sub">{{ stats.total_movies }} total movies</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">👥</div>
+                <div class="stat-label">Registered Users</div>
+                <div class="stat-value">{{ stats.total_users }}</div>
+                <div class="stat-sub">Members</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">📅</div>
+                <div class="stat-label">Today's Showings</div>
+                <div class="stat-value">{{ stats.today_showings }}</div>
+                <div class="stat-sub">Scheduled today</div>
+            </div>
+        </div>
+
+        <!-- RECENT BOOKINGS -->
+        <div class="admin-panel">
+            <div class="panel-header">
+                <div class="panel-title">🎟️ Recent Bookings</div>
+                <a href="/admin/bookings" class="panel-action-btn">View All</a>
+            </div>
+            <div class="panel-body">
+                {% if recent_bookings %}
+                <div class="admin-table-wrap">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Ref</th>
+                                <th>Customer</th>
+                                <th>Movie</th>
+                                <th>Date</th>
+                                <th>Seats</th>
+                                <th>Total</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for b in recent_bookings %}
+                            <tr>
+                                <td><code style="color:#CE0000;font-size:11px;">{{ b.booking_ref }}</code></td>
+                                <td>{{ b.customer_name }}</td>
+                                <td>{{ b.movie_title }}</td>
+                                <td style="white-space:nowrap;">{{ b.show_date }} {{ b.show_time }}</td>
+                                <td>{{ b.seat_codes }}</td>
+                                <td style="color:#4caf50;font-weight:700;">₱{{ "{:,.0f}".format(b.total_price) }}</td>
+                                <td>
+                                    <span class="badge badge-{{ b.status|lower }}">{{ b.status }}</span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-state-icon">🎟️</div>
+                    <div class="empty-state-text">No bookings yet.</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- ACTIVE MOVIES -->
+        <div class="admin-panel">
+            <div class="panel-header">
+                <div class="panel-title">🎬 Active Movies</div>
+                <a href="/admin/movies" class="panel-action-btn">Manage Movies</a>
+            </div>
+            <div class="panel-body">
+                {% if active_movies %}
+                <div class="admin-table-wrap">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Poster</th>
+                                <th>Title</th>
+                                <th>Genre</th>
+                                <th>Duration</th>
+                                <th>Rating</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for m in active_movies %}
+                            <tr>
+                                <td>
+                                    <img src="{{ url_for('static', filename=m.poster_path) }}"
+                                         class="tbl-poster"
+                                         onerror="this.src='/static/images/no_poster.png'">
+                                </td>
+                                <td style="font-weight:700;">{{ m.title }}</td>
+                                <td>{{ m.genre }}</td>
+                                <td>{{ m.duration_mins }} min</td>
+                                <td>⭐ {{ m.rating }}</td>
+                                <td><span class="badge badge-{{ m.status }}">{{ m.status }}</span></td>
+                                <td>
+                                    <div class="tbl-actions">
+                                        <a href="/admin/movies/edit/{{ m.id }}" class="tbl-btn tbl-btn-edit">Edit</a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-state-icon">🎬</div>
+                    <div class="empty-state-text">No movies yet.</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+    </main>
+</div>
+
+<footer class="admin-footer">© 2025 TICK.IT — Admin Panel</footer>
+
+</body>
+</html>

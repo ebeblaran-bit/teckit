@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TICK.IT — Seat Editor: {{ hall.hall_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        /* ====== SCREEN ====== */
+        .screen-wrap {
+            text-align: center;
+            margin: 0 auto 28px;
+        }
+        .screen-label {
+            font-size: 11px; font-weight: 700; color: #888;
+            text-transform: uppercase; letter-spacing: 2px;
+            margin-bottom: 8px;
+        }
+        .screen-bar {
+            height: 10px;
+            background: linear-gradient(90deg, transparent, #CE0000 20%, #ff4444 50%, #CE0000 80%, transparent);
+            border-radius: 50%;
+            max-width: 560px;
+            margin: 0 auto;
+            box-shadow: 0 4px 20px rgba(204,0,0,0.5);
+        }
+
+        /* ====== SEAT GRID ====== */
+        .seat-editor-wrap {
+            overflow-x: auto;
+            padding-bottom: 16px;
+        }
+        .seat-grid {
+            display: inline-flex;
+            flex-direction: column;
+            gap: 6px;
+            user-select: none;
+        }
+        .seat-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .row-label {
+            width: 28px; flex-shrink: 0;
+            font-size: 12px; font-weight: 800; color: #CE0000;
+            text-align: center;
+        }
+        .col-header-row { display: flex; gap: 6px; padding-left: 34px; margin-bottom: 4px; }
+        .col-header {
+            width: 38px; text-align: center;
+            font-size: 10px; font-weight: 700; color: #555;
+        }
+
+        /* ====== INDIVIDUAL SEATS ====== */
+        .seat-cell {
+            width: 38px; height: 38px;
+            border-radius: 8px 8px 4px 4px;
+            border: 2px solid;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 9px; font-weight: 800;
+            transition: transform 0.1s, box-shadow 0.15s;
+            flex-shrink: 0;
+            position: relative;
+            overflow: hidden;
+        }
+        .seat-cell::before {
+            content: '';
+            position: absolute; top: 0; left: 0; right: 0;
+            height: 35%;
+            background: rgba(255,255,255,0.08);
+            border-radius: 6px 6px 0 0;
+        }
+        .seat-cell:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0,0,0,0.5); }
+        .seat-cell:active { transform: scale(0.92); }
+
+        /* Seat type colours */
+        .seat-regular  { background: rgba(100,100,110,.25); border-color: #777; color: #ccc; }
+        .seat-vip      { background: rgba(255,193,7,.2);   border-color: #ffc107; color: #ffc107; }
+        .seat-pwd      { background: rgba(33,150,243,.2);  border-color: #1976d2; color: #64b5f6; }
+        .seat-inactive { background: rgba(200,0,0,.15); border-color: #cc0000; border-style: dashed; color: #ff6666; }
+
+        /* ====== TOOLBAR ====== */
+        .editor-toolbar {
+            display: flex; align-items: center; gap: 12px;
+            background: rgba(0,0,0,0.6); border: 1px solid #300000;
+            border-radius: 12px; padding: 14px 18px;
+            margin-bottom: 20px; flex-wrap: wrap;
+        }
+        .tool-btn {
+            display: flex; align-items: center; gap: 7px;
+            height: 36px; padding: 0 14px;
+            border: 2px solid; border-radius: 8px;
+            font-weight: 700; font-size: 12px; cursor: pointer;
+            background: none; transition: all 0.2s;
+        }
+        .tool-regular  { border-color: #777; color: #ccc; }
+        .tool-regular.active, .tool-regular:hover { background: rgba(100,100,110,.35); color: #fff; }
+        .tool-vip      { border-color: #ffc107; color: #ffc107; }
+        .tool-vip.active, .tool-vip:hover { background: rgba(255,193,7,.25); }
+        .tool-pwd      { border-color: #1976d2; color: #64b5f6; }
+        .tool-pwd.active, .tool-pwd:hover { background: rgba(33,150,243,.25); }
+        .tool-inactive { border-color: #cc0000; color: #ff6666; }
+        .tool-inactive.active, .tool-inactive:hover { background: rgba(200,0,0,.2); }
+        .tool-divider  { width: 1px; height: 28px; background: #300000; flex-shrink: 0; }
+
+        .counts-bar {
+            display: flex; gap: 16px; margin-left: auto;
+            font-size: 12px; font-weight: 700;
+        }
+        .count-item { display: flex; align-items: center; gap: 6px; }
+
+        /* ====== SAVE INDICATOR ====== */
+        #saveStatus {
+            display: none; padding: 10px 18px;
+            border-radius: 8px; font-size: 13px; font-weight: 700;
+            margin-bottom: 14px;
+        }
+        .save-ok  { background: rgba(76,175,80,.15); border:1px solid #4caf50; color:#7fff7f; }
+        .save-err { background: rgba(204,0,0,.15);   border:1px solid #cc0000; color:#ff9999; }
+
+        /* ====== PAINT MODE ====== */
+        .paint-mode-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 4px 10px; border-radius: 6px;
+            font-size: 11px; font-weight: 700; color: #fff;
+            background: rgba(206,0,0,0.55);
+            border: 1px solid #CE0000;
+        }
+    </style>
+</head>
+<body>
+
+<header class="admin-header">
+    <div class="admin-logo">TICK.<span>IT</span></div>
+    <div class="admin-title-bar">🏛️ Seat Editor — {{ hall.cinema_name }} / {{ hall.hall_name }}</div>
+    <div class="admin-header-right">
+        <a href="/admin/halls" class="admin-logout-btn" style="background:#300000;color:#aaa;">← Back to Halls</a>
+        <a href="/admin/logout" class="admin-logout-btn">Logout</a>
+    </div>
+</header>
+
+<div class="admin-body">
+    <nav class="admin-sidebar">
+        <span class="sidebar-label">Main</span>
+        <a href="/admin" class="sidebar-link">
+            <span class="sidebar-icon">📊</span><span>Dashboard</span>
+        </a>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-label">Manage</span>
+        <a href="/admin/movies" class="sidebar-link">
+            <span class="sidebar-icon">🎬</span><span>Movies</span>
+        </a>
+        <a href="/admin/bookings" class="sidebar-link">
+            <span class="sidebar-icon">🎟️</span><span>Bookings</span>
+        </a>
+        <a href="/admin/halls" class="sidebar-link active">
+            <span class="sidebar-icon">🏛️</span><span>Halls</span>
+        </a>
+        <a href="/admin/verifications" class="sidebar-link">
+            <span class="sidebar-icon">🪪</span><span>Verifications</span>
+        </a>
+        <a href="/admin/payments" class="sidebar-link">
+            <span class="sidebar-icon">💳</span><span>Payments</span>
+        </a>
+        <a href="/admin/users" class="sidebar-link">
+            <span class="sidebar-icon">👥</span><span>Users</span>
+        </a>
+        <div class="sidebar-divider"></div>
+        <a href="/home" class="sidebar-link">
+            <span class="sidebar-icon">🏠</span><span>Main Site</span>
+        </a>
+
+    </nav>
+
+    <main class="admin-main">
+        <div class="page-heading">Seat Layout Editor</div>
+
+        <!-- INSTRUCTIONS CARD -->
+        <div style="background:rgba(255,193,7,.07);border:1px solid #997000;border-radius:10px;padding:13px 18px;margin-bottom:18px;font-size:12px;color:#ffd966;line-height:1.7;">
+            <strong>How to use:</strong>
+            Select a tool (Regular / VIP / PWD / Unavailable), then
+            <strong>click</strong> a seat to apply it. Hold and <strong>drag</strong> to paint multiple seats at once.
+            Changes are not saved until you click <strong>Save Layout</strong>.<br>
+            New showings for <em>{{ hall.cinema_name }}</em> will auto-generate seats from this layout.
+        </div>
+
+        <!-- HALL INFO CHIPS -->
+        <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;">
+            <div style="background:rgba(0,0,0,0.5);border:1px solid #300000;border-radius:8px;padding:7px 14px;font-size:12px;">
+                <span style="color:#888;">Cinema:</span>
+                <strong style="color:#fff;margin-left:6px;">{{ hall.cinema_name }}</strong>
+            </div>
+            <div style="background:rgba(0,0,0,0.5);border:1px solid #300000;border-radius:8px;padding:7px 14px;font-size:12px;">
+                <span style="color:#888;">Hall:</span>
+                <strong style="color:#fff;margin-left:6px;">{{ hall.hall_name }}</strong>
+            </div>
+            <div style="background:rgba(0,0,0,0.5);border:1px solid #300000;border-radius:8px;padding:7px 14px;font-size:12px;">
+                <span style="color:#888;">Grid:</span>
+                <strong style="color:#CE0000;margin-left:6px;">{{ hall.rows_count }} × {{ hall.cols_count }}</strong>
+            </div>
+        </div>
+
+        <!-- SAVE STATUS -->
+        <div id="saveStatus"></div>
+
+        <!-- TOOLBAR -->
+        <div class="editor-toolbar">
+            <span style="font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px;">Paint:</span>
+            <button class="tool-btn tool-regular" id="tool-regular" onclick="setTool('Regular')">
+                <span style="width:14px;height:14px;border-radius:3px;background:rgba(100,100,110,.5);border:1px solid #777;"></span>
+                Regular
+            </button>
+            <button class="tool-btn tool-vip" id="tool-vip" onclick="setTool('VIP')">
+                <span style="width:14px;height:14px;border-radius:3px;background:rgba(255,193,7,.3);border:1px solid #ffc107;"></span>
+                VIP
+            </button>
+            <button class="tool-btn tool-pwd" id="tool-pwd" onclick="setTool('PWD')">
+                <span style="width:14px;height:14px;border-radius:3px;background:rgba(33,150,243,.3);border:1px solid #1976d2;"></span>
+                PWD
+            </button>
+            <button class="tool-btn tool-inactive" id="tool-inactive" onclick="setTool('Inactive')">
+                <span style="width:14px;height:14px;border-radius:3px;background:rgba(200,0,0,.2);border:1px dashed #cc0000;display:flex;align-items:center;justify-content:center;font-size:9px;color:#ff6666;">✕</span>
+                Unavailable
+            </button>
+
+            <div class="tool-divider"></div>
+
+            <button onclick="fillAll('Regular')" style="height:36px;padding:0 12px;background:rgba(255,255,255,.06);border:1px solid #444;border-radius:8px;color:#aaa;font-size:11px;font-weight:700;cursor:pointer;">
+                Fill All Regular
+            </button>
+            <button onclick="fillAll('VIP')" style="height:36px;padding:0 12px;background:rgba(255,193,7,.08);border:1px solid #997000;border-radius:8px;color:#ffc107;font-size:11px;font-weight:700;cursor:pointer;">
+                Fill All VIP
+            </button>
+
+            <div class="tool-divider"></div>
+
+            <div class="counts-bar">
+                <div class="count-item">
+                    <span style="width:10px;height:10px;border-radius:2px;background:#777;"></span>
+                    <span style="color:#aaa;">Regular: <strong id="cnt-regular" style="color:#fff;">0</strong></span>
+                </div>
+                <div class="count-item">
+                    <span style="width:10px;height:10px;border-radius:2px;background:#ffc107;"></span>
+                    <span style="color:#aaa;">VIP: <strong id="cnt-vip" style="color:#ffc107;">0</strong></span>
+                </div>
+                <div class="count-item">
+                    <span style="width:10px;height:10px;border-radius:2px;background:#1976d2;"></span>
+                    <span style="color:#aaa;">PWD: <strong id="cnt-pwd" style="color:#64b5f6;">0</strong></span>
+                </div>
+                <div class="count-item">
+                    <span style="width:10px;height:10px;border-radius:2px;background:#cc0000;"></span>
+                    <span style="color:#aaa;">Inactive: <strong id="cnt-inactive" style="color:#ff6666;">0</strong></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- SEAT EDITOR PANEL -->
+        <div class="admin-panel">
+            <div class="panel-header">
+                <div class="panel-title">🪑 Seat Map — Screen at Top</div>
+                <div style="display:flex;gap:10px;">
+                    <button onclick="saveLayout()"
+                        style="height:36px;padding:0 22px;background:#CE0000;border:none;border-radius:8px;color:#fff;font-weight:800;font-size:13px;cursor:pointer;transition:.2s;"
+                        onmouseover="this.style.background='#ff0000'"
+                        onmouseout="this.style.background='#CE0000'">
+                        💾 Save Layout
+                    </button>
+                </div>
+            </div>
+            <div class="panel-body" style="background:rgba(0,0,0,0.3);">
+                <!-- SCREEN INDICATOR -->
+                <div class="screen-wrap">
+                    <div class="screen-label">🎬 SCREEN / STAGE</div>
+                    <div class="screen-bar"></div>
+                </div>
+
+                <!-- COL HEADER -->
+                <div class="seat-editor-wrap">
+                    <div class="col-header-row">
+                        {% for col in col_numbers %}
+                        <div class="col-header">{{ col }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <!-- SEAT GRID -->
+                    <div class="seat-grid" id="seatGrid">
+                        {% for row in row_labels %}
+                        <div class="seat-row">
+                            <div class="row-label">{{ row }}</div>
+                            {% for col in col_numbers %}
+                            {% set key = row ~ '-' ~ col %}
+                            {% set seat = seat_map.get(key) %}
+                            {% if seat %}
+                                {% if not seat.is_active %}
+                                    {% set sclass = 'seat-inactive' %}
+                                    {% set stype  = 'Inactive' %}
+                                    {% set slabel = '✕' %}
+                                {% elif seat.seat_type == 'VIP' %}
+                                    {% set sclass = 'seat-vip' %}
+                                    {% set stype  = 'VIP' %}
+                                    {% set slabel = 'VIP' %}
+                                {% elif seat.seat_type == 'PWD' %}
+                                    {% set sclass = 'seat-pwd' %}
+                                    {% set stype  = 'PWD' %}
+                                    {% set slabel = 'PWD' %}
+                                {% else %}
+                                    {% set sclass = 'seat-regular' %}
+                                    {% set stype  = 'Regular' %}
+                                    {% set slabel = '' %}
+                                {% endif %}
+                            {% else %}
+                                {% set sclass = 'seat-regular' %}
+                                {% set stype  = 'Regular' %}
+                                {% set slabel = '' %}
+                            {% endif %}
+                            <div class="seat-cell {{ sclass }}"
+                                 data-row="{{ row }}"
+                                 data-col="{{ col }}"
+                                 data-code="{{ row }}{{ col }}"
+                                 data-type="{{ stype }}"
+                                 title="{{ row }}{{ col }} — {{ stype }}"
+                                 onmousedown="startPaint(this)"
+                                 onmouseover="continuePaint(this)">{{ slabel }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AISLE GUIDE NOTE -->
+        <div style="margin-top:8px;font-size:11px;color:#555;text-align:center;">
+            💡 Tip: Leave a gap between seats to simulate an aisle — mark those seats as <span style="color:#ff6666;">Unavailable</span>.
+        </div>
+    </main>
+</div>
+
+<footer class="admin-footer">© 2025 TICK.IT — Admin Panel</footer>
+
+<script>
+// ── State ──────────────────────────────────────────────────
+let currentTool = 'Regular';
+let isPainting  = false;
+const HALL_ID   = {{ hall.id }};
+
+// ── Tool selection ─────────────────────────────────────────
+function setTool(tool) {
+    currentTool = tool;
+    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+    const map = { Regular:'regular', VIP:'vip', PWD:'pwd', Inactive:'inactive' };
+    const el  = document.getElementById('tool-' + map[tool]);
+    if (el) el.classList.add('active');
+}
+setTool('Regular');  // default
+
+// ── Paint on mousedown / mouseover ────────────────────────
+document.addEventListener('mouseup', () => { isPainting = false; });
+
+function startPaint(cell) {
+    isPainting = true;
+    applyTool(cell);
+}
+
+function continuePaint(cell) {
+    if (!isPainting) return;
+    applyTool(cell);
+}
+
+function applyTool(cell) {
+    const type = currentTool;
+    cell.dataset.type = type;
+
+    // Remove all type classes
+    cell.classList.remove('seat-regular', 'seat-vip', 'seat-pwd', 'seat-inactive');
+
+    if (type === 'Regular')  { cell.classList.add('seat-regular');  cell.textContent = '';    }
+    else if (type === 'VIP') { cell.classList.add('seat-vip');      cell.textContent = 'VIP'; }
+    else if (type === 'PWD') { cell.classList.add('seat-pwd');      cell.textContent = 'PWD'; }
+    else                     { cell.classList.add('seat-inactive'); cell.textContent = '✕';  }
+
+    cell.title = `${cell.dataset.code} — ${type}`;
+    updateCounts();
+}
+
+// ── Fill all ───────────────────────────────────────────────
+function fillAll(type) {
+    if (!confirm(`Set ALL seats to ${type}? This will overwrite the current layout.`)) return;
+    const old = currentTool;
+    currentTool = type;
+    document.querySelectorAll('.seat-cell').forEach(applyTool);
+    currentTool = old;
+}
+
+// ── Counts ─────────────────────────────────────────────────
+function updateCounts() {
+    const counts = { Regular: 0, VIP: 0, PWD: 0, Inactive: 0 };
+    document.querySelectorAll('.seat-cell').forEach(c => {
+        counts[c.dataset.type] = (counts[c.dataset.type] || 0) + 1;
+    });
+    document.getElementById('cnt-regular').textContent  = counts.Regular;
+    document.getElementById('cnt-vip').textContent      = counts.VIP;
+    document.getElementById('cnt-pwd').textContent      = counts.PWD;
+    document.getElementById('cnt-inactive').textContent = counts.Inactive;
+}
+updateCounts();  // initialise on load
+
+// ── Save Layout ────────────────────────────────────────────
+async function saveLayout() {
+    const cells = document.querySelectorAll('.seat-cell');
+    const seats = [];
+    cells.forEach(cell => {
+        const type   = cell.dataset.type;
+        const active = type !== 'Inactive';
+        seats.push({
+            row:    cell.dataset.row,
+            col:    cell.dataset.col,
+            code:   cell.dataset.code,
+            type:   active ? type : 'Regular',  // inactive seats stored as Regular but is_active=0
+            active: active
+        });
+    });
+
+    const statusEl = document.getElementById('saveStatus');
+    statusEl.style.display = 'none';
+
+    try {
+        const res = await fetch(`/admin/halls/${HALL_ID}/save-layout`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ seats })
+        });
+        const data = await res.json();
+        statusEl.className = data.ok ? 'save-ok' : 'save-err';
+        statusEl.textContent = data.ok ? `✅ ${data.msg}` : `❌ ${data.msg}`;
+        statusEl.style.display = 'block';
+
+        if (data.ok) {
+            setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
+        }
+    } catch (err) {
+        statusEl.className = 'save-err';
+        statusEl.textContent = '❌ Network error. Please try again.';
+        statusEl.style.display = 'block';
+    }
+}
+
+// Prevent text selection while painting
+document.getElementById('seatGrid').addEventListener('dragstart', e => e.preventDefault());
+document.getElementById('seatGrid').addEventListener('selectstart', e => e.preventDefault());
+</script>
+</body>
+</html>

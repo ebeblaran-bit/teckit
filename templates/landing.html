@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TICK.IT - Book Your Cinema Experience</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='landing.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div class="landing-bg">
+
+    <!-- 9-tile collage using correct filenames from static/images/ and static/images/movies/ -->
+    <div class="bg-posters">
+        <div class="bg-poster" style="background-image: url('{{ url_for('static', filename='images/movies/stranger_things_mov.png') }}');"></div>
+        <div class="bg-poster" style="background-image: url('{{ url_for('static', filename='images/movies/avatar_fire_ash_movie.png') }}');"></div>
+        <div class="bg-poster" style="background-image: url('{{ url_for('static', filename='images/movies/walking_dead_mov.png') }}');"></div>
+
+        <div class="bg-poster" style="background-image: url('{{ url_for('static', filename='images/movies/deadpool_&_wolverine.png') }}');"></div>
+        <div class="bg-poster" style="background-image: url('{{ url_for('static', filename='images/movies/how_to_train_your_dragon.png') }}');"></div>
+        <div class="bg-poster" style="background-image: url('{{ url_for('static', filename='images/movies/wicked_for_good.png') }}');"></div>
+
+        <div class="bg-poster" style="background-image: url('{{ url_for('static', filename='images/movies/minecraft_movie.png') }}');"></div>
+        <div class="bg-poster" style="background-image: url('{{ url_for('static', filename='images/movies/lilo_&_stitch.png') }}');"></div>
+        <div class="bg-poster" style="background-image: url('{{ url_for('static', filename='images/movies/captain_america_brave_new_world.png') }}');"></div>
+    </div>
+
+    <div class="bg-overlay-top"></div>
+    <div class="bg-overlay-left"></div>
+    <div class="bg-overlay-center"></div>
+    <div class="bg-overlay-bottom"></div>
+
+    <!-- Top bar -->
+    <div class="top-bar">
+        <div class="logo">TICK.<span>IT</span></div>
+        <a href="/login" class="signin-top-btn">Sign In</a>
+    </div>
+
+    <!-- Hero content -->
+    <div class="hero-content">
+        <p class="hero-tagline">Cinema Ticketing — Cebu</p>
+        <h1 class="hero-title">
+            Your Seat.<br>Your Movie.<br><span class="red">Your Experience.</span>
+        </h1>
+        <p class="hero-desc">
+            Book cinema tickets instantly for the latest blockbusters
+            showing at top venues across Cebu. Fast, easy, and always
+            up to date.
+        </p>
+        <a href="/login" class="hero-signin-btn">
+            Sign In to Book <span class="btn-arrow">›</span>
+        </a>
+    </div>
+
+    <!-- Now showing strip -->
+    <div class="now-showing-strip">
+        <span class="strip-item highlighted">Stranger Things</span>
+        <span class="strip-item">·</span>
+        <span class="strip-item highlighted">Avatar: Fire and Ash</span>
+        <span class="strip-item">·</span>
+        <span class="strip-item highlighted">The Walking Dead</span>
+        <span class="strip-item">·</span>
+        <span class="strip-item">Now Showing at SM Seaside · Nustar · IL CORSO · Gaisano · UC · TOPS Skydom</span>
+    </div>
+
+</div>
+
+</body>
+</html>

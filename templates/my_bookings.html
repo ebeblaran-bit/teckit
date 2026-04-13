@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TICK.IT - My Bookings</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='booking.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+</head>
+<body>
+<nav class="navbar" style="position:relative;">
+    <!-- LEFT: logo above profile -->
+    <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;gap:2px;">
+        <div class="logo" style="font-size:1.25rem;letter-spacing:2px;">TICK.<span>IT</span></div>
+        <div style="display:flex;align-items:center;gap:6px;">
+            <div class="profile-dropdown" id="profileDropdown">
+                <a href="#" class="profile-btn" onclick="toggleDropdown(event)">
+                    <img src="{{ url_for('static', filename='images/profile.png') }}" alt="Profile" class="profile-img">
+                </a>
+                <div class="dropdown-menu" id="dropdownMenu">
+                    <div class="dropdown-user-header">
+                        <div class="dropdown-user-name">{{ user_name }}</div>
+                        <div class="dropdown-user-role">Member</div>
+                    </div>
+                    <a href="/profile"         class="dropdown-item"><span class="dropdown-icon">👤</span> View Profile</a>
+                    <a href="/my-bookings"     class="dropdown-item"><span class="dropdown-icon">🎟️</span> My Bookings</a>
+                    <div class="dropdown-divider"></div>
+                    <a href="/help"            class="dropdown-item"><span class="dropdown-icon">❓</span> Help &amp; Support</a>
+                </div>
+            </div>
+            <span style="font-weight:700;font-size:13px;color:#fff;white-space:nowrap;">{{ user_name }}</span>
+        </div>
+    </div>
+    <!-- CENTER: nav buttons -->
+    <div style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;">
+        <a href="/movies"  class="nav-btn">Movies</a>
+        <a href="/home"    class="nav-btn">Home</a>
+        <a href="/booking" class="nav-btn">Booking</a>
+    </div>
+    <div class="search-wrap">
+        <a href="/logout" class="logout-btn">Logout</a>
+    </div>
+</nav>
+
+<!-- Admin viewing banner -->
+{% if session.get('is_admin') %}
+<div style="background:#300000;border-bottom:2px solid #CE0000;padding:8px 28px;display:flex;align-items:center;justify-content:space-between;font-size:13px;">
+    <span style="color:#ff8888;font-weight:700;">⚙️ You are viewing the main site as Admin</span>
+    <a href="/admin" style="color:#fff;background:#CE0000;padding:4px 14px;border-radius:6px;font-weight:700;text-decoration:none;font-size:12px;">← Back to Admin Panel</a>
+</div>
+{% endif %}
+
+<div class="booking-content">
+    <h1 class="booking-title" style="margin-bottom:24px;">🎟️ My Bookings</h1>
+
+    {% if bookings %}
+    <div class="my-bookings-list">
+        {% for b in bookings %}
+        <div class="my-booking-card status-{{ b.status.lower() }}">
+            <div class="mbc-top">
+                <div class="mbc-movie">{{ b.movie }}</div>
+                <div class="mbc-status mbc-status-{{ b.status.lower() }}">{{ b.status }}</div>
+            </div>
+            <div class="mbc-grid">
+                <div class="mbc-item"><span class="mbc-lbl">📍 Cinema</span><span class="mbc-val">{{ b.cinema }}</span></div>
+                <div class="mbc-item"><span class="mbc-lbl">📅 Date</span><span class="mbc-val">{{ b.date }}</span></div>
+                <div class="mbc-item"><span class="mbc-lbl">🕐 Showtime</span><span class="mbc-val">{{ b.showtime }}</span></div>
+                <div class="mbc-item"><span class="mbc-lbl">💺 Seats</span><span class="mbc-val">{{ b.seats }}</span></div>
+                <div class="mbc-item"><span class="mbc-lbl">🎫 Type</span><span class="mbc-val">{{ b.ticket_type }}</span></div>
+                <div class="mbc-item"><span class="mbc-lbl">💰 Total</span><span class="mbc-val mbc-total">₱{{ b.total }}</span></div>
+            </div>
+            <div class="mbc-footer">
+                <span class="mbc-ref">Ref: <strong>{{ b.ref }}</strong></span>
+                <span class="mbc-booked-on">Booked on {{ b.booked_on }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="no-bookings">
+        <div style="font-size:56px;margin-bottom:16px;">🎬</div>
+        <div style="font-size:18px;font-weight:700;color:#fff;margin-bottom:8px;">No bookings yet!</div>
+        <div style="font-size:14px;color:#888;margin-bottom:24px;">You haven't booked any tickets. Find a movie you love!</div>
+        <a href="/booking" class="btn-red">Browse Movies →</a>
+    </div>
+    {% endif %}
+</div>
+
+<div class="footer-bar"><p class="footer-text">&#169; 2025 TICK.IT — All rights reserved</p></div>
+
+<style>
+.my-bookings-list { display:flex; flex-direction:column; gap:16px; max-width:860px; }
+.my-booking-card { background:#110000; border:1px solid #300000; border-radius:14px; padding:20px 24px; }
+.my-booking-card.status-confirmed { border-left:4px solid #4caf50; }
+.my-booking-card.status-cancelled { border-left:4px solid #ff4444; opacity:.7; }
+.my-booking-card.status-completed { border-left:4px solid #888; }
+.mbc-top   { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+.mbc-movie { font-size:17px; font-weight:800; color:#fff; }
+.mbc-status { font-size:11px; font-weight:700; padding:4px 10px; border-radius:5px; }
+.mbc-status-confirmed { background:rgba(76,175,80,.15); color:#4caf50; border:1px solid #4caf50; }
+.mbc-status-cancelled { background:rgba(204,0,0,.15); color:#ff6666; border:1px solid #ff4444; }
+.mbc-status-completed { background:rgba(136,136,136,.15); color:#aaa; border:1px solid #555; }
+.mbc-grid   { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:14px; }
+.mbc-item   { display:flex; flex-direction:column; gap:3px; }
+.mbc-lbl    { font-size:11px; color:#666; }
+.mbc-val    { font-size:13px; font-weight:700; color:#fff; }
+.mbc-total  { color:#ffcc00; }
+.mbc-footer { display:flex; justify-content:space-between; align-items:center; border-top:1px solid #300000; padding-top:12px; font-size:12px; }
+.mbc-ref    { color:#888; } .mbc-ref strong { color:#cc0000; font-size:13px; }
+.mbc-booked-on { color:#555; }
+.no-bookings { text-align:center; padding:80px 20px; }
+@media(max-width:600px) { .mbc-grid { grid-template-columns:1fr 1fr; } }
+</style>
+
+<script>
+function toggleDropdown(e) {
+    e.preventDefault();
+    document.getElementById("dropdownMenu").classList.toggle("show");
+}
+document.addEventListener("click", function(e) {
+    const pd = document.getElementById("profileDropdown");
+    if (pd && !pd.contains(e.target)) document.getElementById("dropdownMenu").classList.remove("show");
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TICK.IT — Discount Verifications</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<header class="admin-header">
+    <div class="admin-logo">TICK.<span>IT</span></div>
+    <div class="admin-title-bar">Discount Verifications</div>
+    <div class="admin-header-right">
+        <span style="font-size:13px;color:#888;">Admin</span>
+        <a href="/admin/logout" class="admin-logout-btn">Logout</a>
+    </div>
+</header>
+
+<div class="admin-body">
+    <nav class="admin-sidebar">
+        <span class="sidebar-label">Main</span>
+        <a href="/admin"               class="sidebar-link"><span class="sidebar-icon">📊</span><span>Dashboard</span></a>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-label">Manage</span>
+        <a href="/admin/movies"        class="sidebar-link"><span class="sidebar-icon">🎬</span><span>Movies</span></a>
+        <a href="/admin/bookings"      class="sidebar-link"><span class="sidebar-icon">🎟️</span><span>Bookings</span></a>
+        <a href="/admin/verifications" class="sidebar-link active"><span class="sidebar-icon">🪪</span><span>Verifications</span></a>
+        <a href="/admin/payments"      class="sidebar-link"><span class="sidebar-icon">💳</span><span>Payments</span></a>
+        <a href="/admin/users"         class="sidebar-link"><span class="sidebar-icon">👥</span><span>Users</span></a>
+        <div class="sidebar-divider"></div>
+        <a href="/home"                class="sidebar-link"><span class="sidebar-icon">🏠</span><span>Main Site</span></a>
+    </nav>
+
+    <main class="admin-main">
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for cat, msg in messages %}
+                <div class="alert alert-{{ cat }}">{{ msg }}</div>
+            {% endfor %}
+        {% endwith %}
+
+        <div class="page-heading">🪪 Discount Verification Requests</div>
+
+        <!-- INFO BANNER -->
+        <div style="background:rgba(255,140,0,.1);border:1px solid #cc6600;border-radius:10px;padding:14px 18px;margin-bottom:20px;font-size:13px;color:#ffaa44;line-height:1.7;">
+            <strong>📋 Physical Verification Process (Option A):</strong><br>
+            Users select Student / Senior / PWD ticket type at booking time.
+            The system marks their booking as <strong>Pending Verification</strong>.<br>
+            Staff verifies the physical ID at the cinema entrance before allowing entry.
+            Admin can pre-approve or reject here based on follow-up calls or walk-in verification.
+        </div>
+
+        <!-- FILTER BAR -->
+        <div class="filter-bar">
+            <input type="text" class="filter-search" id="verSearch"
+                   placeholder="🔍 Search ref, name, movie..."
+                   oninput="filterVer()">
+            <select class="filter-select" id="statusFilter" onchange="filterVer()">
+                <option value="">All Status</option>
+                <option value="pending_verification">Pending</option>
+                <option value="verified">Verified</option>
+                <option value="rejected">Rejected</option>
+            </select>
+            <select class="filter-select" id="typeFilter" onchange="filterVer()">
+                <option value="">All Types</option>
+                <option value="Student">Student</option>
+                <option value="Senior / PWD">Senior / PWD</option>
+            </select>
+        </div>
+
+        <div class="admin-panel">
+            <div class="panel-body" style="padding:0;">
+                <div class="admin-table-wrap">
+                    <table class="admin-table" id="verTable">
+                        <thead>
+                            <tr>
+                                <th>Ref #</th>
+                                <th>Customer</th>
+                                <th>Contact</th>
+                                <th>Ticket Type</th>
+                                <th>Movie</th>
+                                <th>Cinema</th>
+                                <th>Show Date</th>
+                                <th>Status</th>
+                                <th>Booked On</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="verBody">
+                            {% for v in verifications %}
+                            <tr data-search="{{ (v.ref_code ~ ' ' ~ v.customer_name ~ ' ' ~ v.movie)|lower }}"
+                                data-status="{{ v.discount_status }}"
+                                data-type="{{ v.ticket_type }}">
+                                <td><code style="color:#CE0000;font-size:11px;">{{ v.ref_code }}</code></td>
+                                <td style="font-weight:700;min-width:130px;">{{ v.customer_name }}</td>
+                                <td style="font-size:12px;color:#aaa;">{{ v.contact or '—' }}</td>
+                                <td>
+                                    {% if v.ticket_type == 'Student' %}
+                                        <span class="badge" style="background:rgba(30,100,200,.15);color:#5599ff;border:1px solid #2266cc;">
+                                            🎓 Student
+                                        </span>
+                                    {% else %}
+                                        <span class="badge" style="background:rgba(100,0,200,.15);color:#cc88ff;border:1px solid #7700cc;">
+                                            ♿ Senior/PWD
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td style="font-weight:700;min-width:120px;">{{ v.movie }}</td>
+                                <td style="font-size:12px;color:#aaa;">{{ v.cinema }}</td>
+                                <td style="white-space:nowrap;font-size:12px;">
+                                    {{ v.show_date }} {{ v.show_time }}
+                                </td>
+                                <td>
+                                    {% if v.discount_status == 'pending_verification' %}
+                                        <span class="badge badge-open">⏳ Pending</span>
+                                    {% elif v.discount_status == 'verified' %}
+                                        <span class="badge badge-confirmed">✅ Verified</span>
+                                    {% elif v.discount_status == 'rejected' %}
+                                        <span class="badge badge-cancelled">❌ Rejected</span>
+                                    {% endif %}
+                                </td>
+                                <td style="font-size:11px;color:#666;white-space:nowrap;">
+                                    {{ v.created_at.strftime('%Y-%m-%d %H:%M') if v.created_at else '—' }}
+                                </td>
+                                <td>
+                                    <div class="tbl-actions">
+                                        {% if v.discount_status == 'pending_verification' %}
+                                        <form method="POST" action="/admin/verifications/approve" style="display:inline;">
+                                            <input type="hidden" name="ref_code" value="{{ v.ref_code }}">
+                                            <button type="submit" class="tbl-btn"
+                                                style="background:rgba(76,175,80,.15);color:#4caf50;border:1px solid #4caf50;"
+                                                onclick="return confirm('Approve discount for {{ v.ref_code }}?')">
+                                                ✅ Approve
+                                            </button>
+                                        </form>
+                                        <form method="POST" action="/admin/verifications/reject" style="display:inline;">
+                                            <input type="hidden" name="ref_code" value="{{ v.ref_code }}">
+                                            <button type="submit" class="tbl-btn tbl-btn-delete"
+                                                onclick="return confirm('Reject discount for {{ v.ref_code }}? Price reverts to Regular.')">
+                                                ❌ Reject
+                                            </button>
+                                        </form>
+                                        {% else %}
+                                            <span style="color:#444;font-size:11px;">—</span>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="10">
+                                <div class="empty-state">
+                                    <div class="empty-state-icon">🪪</div>
+                                    <div class="empty-state-text">No discount verification requests.</div>
+                                </div>
+                            </td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<footer class="admin-footer">© 2025 TICK.IT — Admin Panel</footer>
+
+<script>
+function filterVer() {
+    const q  = document.getElementById('verSearch').value.toLowerCase();
+    const st = document.getElementById('statusFilter').value;
+    const tp = document.getElementById('typeFilter').value;
+    document.querySelectorAll('#verBody tr[data-search]').forEach(row => {
+        const s = (!st || row.dataset.status === st);
+        const t = (!tp || row.dataset.type === tp);
+        const m = row.dataset.search.includes(q);
+        row.style.display = (s && t && m) ? '' : 'none';
+    });
+}
+</script>
+</body>
+</html>

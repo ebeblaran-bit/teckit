@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TICK.IT — Cinema Halls</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<header class="admin-header">
+    <div class="admin-logo">TICK.<span>IT</span></div>
+    <div class="admin-title-bar">Cinema Halls &amp; Seat Layouts</div>
+    <div class="admin-header-right">
+        <span style="font-size:13px;color:#888;">Admin</span>
+        <a href="/admin/logout" class="admin-logout-btn">Logout</a>
+    </div>
+</header>
+
+<div class="admin-body">
+    <nav class="admin-sidebar">
+        <span class="sidebar-label">Main</span>
+        <a href="/admin" class="sidebar-link"><span class="sidebar-icon">📊</span><span>Dashboard</span></a>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-label">Manage</span>
+        <a href="/admin/movies"    class="sidebar-link"><span class="sidebar-icon">🎬</span><span>Movies</span></a>
+        <a href="/admin/bookings"  class="sidebar-link"><span class="sidebar-icon">🎟️</span><span>Bookings</span></a>
+        <a href="/admin/halls"     class="sidebar-link active"><span class="sidebar-icon">🏛️</span><span>Halls</span></a>
+        <a href="/admin/verifications" class="sidebar-link"><span class="sidebar-icon">🪪</span><span>Verifications</span></a>
+        <a href="/admin/payments"  class="sidebar-link"><span class="sidebar-icon">💳</span><span>Payments</span></a>
+        <a href="/admin/users"     class="sidebar-link"><span class="sidebar-icon">👥</span><span>Users</span></a>
+        <div class="sidebar-divider"></div>
+        <a href="/home" class="sidebar-link"><span class="sidebar-icon">🏠</span><span>Main Site</span></a>
+    </nav>
+
+    <main class="admin-main">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for cat, msg in messages %}
+                <div class="alert alert-{{ cat }}">{{ msg }}</div>
+            {% endfor %}
+        {% endwith %}
+
+        <div class="page-heading">🏛️ Cinema Halls</div>
+
+        <!-- INFO BANNER -->
+        <div style="background:rgba(80,140,255,.08);border:1px solid #2266cc;border-radius:10px;padding:14px 18px;margin-bottom:22px;font-size:13px;color:#99ccff;line-height:1.7;">
+            <strong>💡 How seat mapping works:</strong><br>
+            Create a hall for each cinema screen. Use the visual editor to configure seat types
+            (Regular / VIP / PWD) and mark broken seats. When a showing is created for that cinema,
+            seats are auto-generated from the hall layout you design here.
+        </div>
+
+        <!-- ADD HALL BUTTON -->
+        <div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
+            <button class="panel-action-btn" onclick="openAddModal()">+ Add New Hall</button>
+        </div>
+
+        <!-- HALLS TABLE -->
+        {% if halls %}
+        <div class="admin-panel">
+            <div class="panel-body" style="padding:0;">
+                <div class="admin-table-wrap">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Cinema</th>
+                                <th>Hall Name</th>
+                                <th>Layout</th>
+                                <th>Regular</th>
+                                <th>VIP</th>
+                                <th>PWD</th>
+                                <th>Inactive</th>
+                                <th>Total Seats</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for h in halls %}
+                            <tr>
+                                <td style="font-weight:700;color:#fff;">{{ h.cinema_name }}</td>
+                                <td>
+                                    <span style="font-weight:800;font-size:14px;color:#fff;">{{ h.hall_name }}</span>
+                                </td>
+                                <td style="font-size:12px;color:#aaa;">
+                                    {{ h.rows_count }} rows × {{ h.cols_count }} cols
+                                </td>
+                                <td>
+                                    <span style="color:#aaa;font-weight:700;">
+                                        {{ h.seat_count - h.vip_count - h.pwd_count - h.inactive_count }}
+                                    </span>
+                                </td>
+                                <td><span class="badge" style="background:rgba(255,193,7,.15);color:#ffc107;border:1px solid #ffc107;">{{ h.vip_count }}</span></td>
+                                <td><span class="badge" style="background:rgba(33,150,243,.15);color:#64b5f6;border:1px solid #1565c0;">{{ h.pwd_count }}</span></td>
+                                <td><span style="color:{% if h.inactive_count > 0 %}#ff6666{% else %}#555{% endif %};">{{ h.inactive_count }}</span></td>
+                                <td style="font-weight:700;color:#4caf50;">{{ h.seat_count }}</td>
+                                <td>
+                                    <div class="tbl-actions">
+                                        <a href="/admin/halls/{{ h.id }}/editor" class="tbl-btn tbl-btn-edit">
+                                            ✏️ Edit Layout
+                                        </a>
+                                        <form method="POST" action="/admin/halls/delete" style="display:inline;">
+                                            <input type="hidden" name="hall_id" value="{{ h.id }}">
+                                            <button type="submit" class="tbl-btn tbl-btn-delete"
+                                                onclick="return confirm('Delete hall {{ h.hall_name }}? This cannot be undone.')">
+                                                🗑️ Delete
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="admin-panel">
+            <div class="panel-body">
+                <div class="empty-state">
+                    <div class="empty-state-icon">🏛️</div>
+                    <div class="empty-state-text">No halls configured yet. Add one to get started!</div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- SEAT TYPE LEGEND -->
+        <div class="admin-panel" style="margin-top:16px;">
+            <div class="panel-header">
+                <div class="panel-title">🎨 Seat Type Legend</div>
+            </div>
+            <div class="panel-body">
+                <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <div style="width:32px;height:32px;border-radius:6px;background:rgba(150,150,150,.25);border:2px solid #777;"></div>
+                        <span style="font-size:13px;color:#aaa;">Regular — Standard ticket price (₱450)</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <div style="width:32px;height:32px;border-radius:6px;background:rgba(255,193,7,.25);border:2px solid #ffc107;"></div>
+                        <span style="font-size:13px;color:#aaa;">VIP — Premium seats (₱450)</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <div style="width:32px;height:32px;border-radius:6px;background:rgba(33,150,243,.25);border:2px solid #1976d2;"></div>
+                        <span style="font-size:13px;color:#aaa;">PWD — Reserved for PWD / Senior</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <div style="width:32px;height:32px;border-radius:6px;background:rgba(200,0,0,.25);border:2px dashed #cc0000;display:flex;align-items:center;justify-content:center;font-size:14px;color:#ff6666;">✕</div>
+                        <span style="font-size:13px;color:#aaa;">Unavailable — Broken / Maintenance</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<footer class="admin-footer">© 2025 TICK.IT — Admin Panel</footer>
+
+<!-- ADD HALL MODAL -->
+<div class="modal-overlay" id="addHallModal">
+    <div class="modal-box" style="max-width:480px;">
+        <button class="modal-close" onclick="closeAddModal()">×</button>
+        <div class="modal-title">🏛️ Add New Hall</div>
+
+        <form method="POST" action="/admin/halls/add">
+            <div class="form-group">
+                <label class="form-label">Cinema *</label>
+                <select name="cinema_id" class="form-control" required>
+                    <option value="" disabled selected>Select a cinema</option>
+                    {% for c in cinemas %}
+                    <option value="{{ c.id }}">{{ c.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Hall Name *</label>
+                <input type="text" name="hall_name" class="form-control"
+                       placeholder="e.g. Hall 1, Screen A, IMAX Hall" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Number of Rows</label>
+                    <input type="number" name="rows_count" class="form-control"
+                           value="8" min="2" max="26" required>
+                    <span class="form-error" style="font-size:11px;color:#666;">Max 26 (A–Z)</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Seats per Row</label>
+                    <input type="number" name="cols_count" class="form-control"
+                           value="10" min="2" max="30" required>
+                    <span class="form-error" style="font-size:11px;color:#666;">Max 30 per row</span>
+                </div>
+            </div>
+
+            <div style="background:rgba(255,193,7,.08);border:1px solid #997000;border-radius:8px;padding:12px 14px;margin:12px 0;font-size:12px;color:#ffd966;line-height:1.6;">
+                💡 Default layout: rows A–B = VIP, rest = Regular.<br>
+                You can customize everything in the visual editor after creating the hall.
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn-cancel" onclick="closeAddModal()">Cancel</button>
+                <button type="submit" class="btn-submit">Create Hall →</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openAddModal()  { document.getElementById('addHallModal').classList.add('open'); }
+function closeAddModal() { document.getElementById('addHallModal').classList.remove('open'); }
+document.getElementById('addHallModal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('open');
+});
+</script>
+</body>
+</html>

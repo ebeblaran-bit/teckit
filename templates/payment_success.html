@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TICK.IT — Payment Result</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='booking.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        .result-wrap { display:flex; justify-content:center; padding:48px 20px; }
+        .result-card {
+            background:#110000; border:2px solid #300000; border-radius:20px;
+            max-width:520px; width:100%; padding:40px 36px; text-align:center;
+        }
+        .result-icon  { font-size:64px; margin-bottom:16px; }
+        .result-title { font-size:26px; font-weight:900; color:#fff; margin-bottom:8px; }
+        .result-sub   { font-size:14px; color:#aaa; margin-bottom:24px; line-height:1.6; }
+        .result-ref   { font-size:13px; color:#888; }
+        .result-ref strong { color:#CE0000; font-size:16px; }
+
+        .info-grid {
+            display:grid; grid-template-columns:1fr 1fr;
+            gap:10px; margin:20px 0; text-align:left;
+        }
+        .info-item { border:1px solid #300000; border-radius:8px; padding:10px 12px; }
+        .info-lbl { font-size:10px; color:#666; font-weight:700; text-transform:uppercase; }
+        .info-val { font-size:13px; color:#fff; font-weight:700; margin-top:3px; }
+
+        .badge-paid     { background:rgba(76,175,80,.2);  border:1px solid #4caf50; color:#4caf50;
+                          border-radius:8px; padding:6px 16px; font-size:13px; font-weight:700; display:inline-block; }
+        .badge-pending  { background:rgba(255,170,0,.2);  border:1px solid #cc8800; color:#ffd966;
+                          border-radius:8px; padding:6px 16px; font-size:13px; font-weight:700; display:inline-block; }
+        .badge-verify   { background:rgba(255,140,0,.2);  border:1px solid #cc6600; color:#ffaa44;
+                          border-radius:8px; padding:6px 16px; font-size:13px; font-weight:700; display:inline-block; margin-top:8px; }
+
+        .btn-group { display:flex; gap:10px; justify-content:center; margin-top:24px; }
+        .btn-outline { padding:10px 22px; border:2px solid #CE0000; border-radius:8px;
+                       color:#CE0000; text-decoration:none; font-weight:700; font-size:14px; transition:.2s; }
+        .btn-outline:hover { background:#CE0000; color:#fff; }
+        .btn-red { padding:10px 22px; background:#CE0000; border:none; border-radius:8px;
+                   color:#fff; text-decoration:none; font-weight:700; font-size:14px; transition:.2s; }
+        .btn-red:hover { background:#ff0000; }
+
+        .discount-notice {
+            margin-top:16px; padding:12px 16px;
+            background:rgba(255,140,0,.12); border:1px solid #cc6600;
+            border-radius:8px; font-size:13px; color:#ffaa44; text-align:left;
+        }
+    </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar" style="position:relative;">
+    <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;gap:2px;">
+        <div class="logo" style="font-size:1.25rem;letter-spacing:2px;">TICK.<span>IT</span></div>
+    </div>
+    <div style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;">
+        <a href="/movies"  class="nav-btn">Movies</a>
+        <a href="/home"    class="nav-btn">Home</a>
+        <a href="/booking" class="nav-btn">Booking</a>
+    </div>
+    <div class="search-wrap">
+        <a href="/logout" class="logout-btn">Logout</a>
+    </div>
+</nav>
+
+<div class="result-wrap">
+    <div class="result-card">
+
+        {% if payment_status == 'paid' %}
+            <div class="result-icon">🎉</div>
+            <div class="result-title">Payment Successful!</div>
+            <div class="result-sub">
+                Your booking is confirmed. Present your reference code at the cinema counter.
+            </div>
+            <div class="badge-paid">✅ PAID</div>
+
+        {% elif payment_status == 'unpaid' or payment_status == 'unknown' %}
+            <div class="result-icon">⏳</div>
+            <div class="result-title">Payment Pending</div>
+            <div class="result-sub">
+                Your booking was created but payment hasn't been confirmed yet.
+                If you completed payment, it may take a few minutes to update.
+            </div>
+            <div class="badge-pending">⏳ PENDING</div>
+
+        {% else %}
+            <div class="result-icon">🎟️</div>
+            <div class="result-title">Booking Confirmed</div>
+            <div class="result-sub">
+                Your seats are reserved. Please complete payment to finalize.
+            </div>
+        {% endif %}
+
+        {% if booking %}
+        <div class="info-grid" style="margin-top:24px;">
+            <div class="info-item" style="grid-column:1/-1;">
+                <div class="info-lbl">🎬 Movie</div>
+                <div class="info-val">{{ booking.movie }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-lbl">📍 Cinema</div>
+                <div class="info-val">{{ booking.cinema }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-lbl">📅 Date</div>
+                <div class="info-val">{{ booking.date_fmt }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-lbl">🕐 Showtime</div>
+                <div class="info-val">{{ booking.time_fmt }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-lbl">💺 Seats</div>
+                <div class="info-val">{{ booking.seat_codes }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-lbl">🎫 Ticket Type</div>
+                <div class="info-val">{{ booking.ticket_type }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-lbl">💰 Total Paid</div>
+                <div class="info-val" style="color:#4caf50;">₱{{ "{:,.0f}".format(booking.total_price) }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-lbl">🔖 Reference</div>
+                <div class="info-val" style="color:#CE0000;">{{ booking.ref_code }}</div>
+            </div>
+        </div>
+
+        {% if booking.discount_status == 'pending_verification' %}
+        <div class="discount-notice">
+            <strong>⚠️ Discount Pending Verification</strong><br>
+            You selected a <strong>{{ booking.ticket_type }}</strong> ticket.
+            Please present a valid ID (Student ID / PWD ID / Senior Citizen card)
+            to cinema staff upon arrival for verification.
+            If your ID cannot be verified, the regular price of ₱450 will apply.
+        </div>
+        {% elif booking.discount_status == 'verified' %}
+        <div style="margin-top:12px;padding:10px 14px;background:rgba(76,175,80,.12);border:1px solid #4caf50;border-radius:8px;font-size:13px;color:#4caf50;">
+            ✅ Discount verified by admin.
+        </div>
+        {% endif %}
+        {% endif %}
+
+        <div style="margin-top:20px;font-size:13px;color:#555;">
+            💡 Keep your reference number safe. Arrive 15 minutes before showtime.
+        </div>
+
+        <div class="btn-group">
+            <a href="/booking" class="btn-outline">Book Another</a>
+            <a href="/my-bookings" class="btn-red">My Bookings</a>
+        </div>
+    </div>
+</div>
+
+<div class="footer-bar"><p class="footer-text">© 2025 TICK.IT — All rights reserved</p></div>
+</body>
+</html>

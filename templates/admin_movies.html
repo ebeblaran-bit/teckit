@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TICK.IT — Manage Movies</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="admin-header">
+    <div class="admin-logo">TICK.<span>IT</span></div>
+    <div class="admin-title-bar">Movies Management</div>
+    <div class="admin-header-right">
+        <span style="font-size:13px;color:#888;">Admin</span>
+        <a href="/admin/logout" class="admin-logout-btn">Logout</a>
+    </div>
+</header>
+
+<div class="admin-body">
+    <!-- SIDEBAR -->
+    <nav class="admin-sidebar">
+        <span class="sidebar-label">Main</span>
+        <a href="/admin" class="sidebar-link">
+            <span class="sidebar-icon">📊</span><span>Dashboard</span>
+        </a>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-label">Manage</span>
+        <a href="/admin/movies" class="sidebar-link active">
+            <span class="sidebar-icon">🎬</span><span>Movies</span>
+        </a>
+        <a href="/admin/bookings" class="sidebar-link">
+            <span class="sidebar-icon">🎟️</span><span>Bookings</span>
+        </a>
+        <a href="/admin/halls" class="sidebar-link">
+            <span class="sidebar-icon">🏛️</span><span>Halls</span>
+        </a>
+        <a href="/admin/verifications" class="sidebar-link">
+            <span class="sidebar-icon">🪪</span><span>Verifications</span>
+        </a>
+        <a href="/admin/payments" class="sidebar-link">
+            <span class="sidebar-icon">💳</span><span>Payments</span>
+        </a>
+        <a href="/admin/users" class="sidebar-link">
+            <span class="sidebar-icon">👥</span><span>Users</span>
+        </a>
+        <div class="sidebar-divider"></div>
+        <a href="/home" class="sidebar-link">
+            <span class="sidebar-icon">🏠</span><span>Main Site</span>
+        </a>
+
+    </nav>
+
+    <!-- MAIN -->
+    <main class="admin-main">
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for cat, msg in messages %}
+                <div class="alert alert-{{ cat }}">{{ msg }}</div>
+            {% endfor %}
+        {% endwith %}
+
+        <div class="page-heading">🎬 Movies</div>
+
+        <!-- FILTER + ADD -->
+        <div class="filter-bar">
+            <input type="text" class="filter-search" id="movieSearch"
+                   placeholder="🔍 Search movies..." oninput="filterTable()">
+            <select class="filter-select" id="statusFilter" onchange="filterTable()">
+                <option value="">All Status</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+            </select>
+            <button class="panel-action-btn" onclick="openAddModal()">＋ Add Movie</button>
+        </div>
+
+        <!-- TABLE -->
+        <div class="admin-panel">
+            <div class="panel-body" style="padding:0;">
+                <div class="admin-table-wrap">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Poster</th>
+                                <th>Title</th>
+                                <th>Genre</th>
+                                <th>Cast</th>
+                                <th>Duration</th>
+                                <th>Release</th>
+                                <th>Rating</th>
+                                <th>Avail. Seats</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="moviesBody">
+                            {% for m in movies %}
+                            <tr class="movie-row"
+                                data-title="{{ m.title | lower }}"
+                                data-status="{{ m.status }}"
+                                data-id="{{ m.id }}"
+                                data-mtitle="{{ m.title | replace('"', '&quot;') | replace("'", '&#39;') }}"
+                                data-genre="{{ m.genre | replace('"', '&quot;') | replace("'", '&#39;') }}"
+                                data-cast="{{ (m.cast_members or '') | replace('"', '&quot;') | replace("'", '&#39;') }}"
+                                data-duration="{{ m.duration_mins }}"
+                                data-rating="{{ m.rating }}"
+                                data-release="{{ m.release_date or '' }}"
+                                data-desc="{{ (m.description or '') | replace('"', '&quot;') | replace("'", '&#39;') }}"
+                                data-mstatus="{{ m.status }}">
+                                <td>
+                                    <img src="{{ url_for('static', filename=m.poster_path) }}"
+                                         class="tbl-poster"
+                                         onerror="this.src='/static/images/no_poster.png'">
+                                </td>
+                                <td style="font-weight:700;min-width:140px;">{{ m.title }}</td>
+                                <td>{{ m.genre }}</td>
+                                <td style="font-size:12px;color:#aaa;max-width:160px;">{{ m.cast_members or '—' }}</td>
+                                <td style="white-space:nowrap;">{{ m.duration_mins }} min</td>
+                                <td style="white-space:nowrap;">{{ m.release_date or '—' }}</td>
+                                <td>⭐ {{ m.rating }}</td>
+                                <td>
+                                    <span style="font-weight:700;color:
+                                        {%- if m.avail_seats == 0 %}#ff6666
+                                        {%- elif m.avail_seats < 10 %}#ffc800
+                                        {%- else %}#4caf50{% endif %};">
+                                        {{ m.avail_seats }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge badge-{{ m.status }}">{{ m.status }}</span>
+                                </td>
+                                <td>
+                                    <div class="tbl-actions">
+                                        <button class="tbl-btn tbl-btn-edit"
+                                                onclick="openEditModal(this)">Edit</button>
+                                        <button class="tbl-btn tbl-btn-delete"
+                                                onclick="confirmDelete(this)">Delete</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="10">
+                                    <div class="empty-state">
+                                        <div class="empty-state-icon">🎬</div>
+                                        <div class="empty-state-text">No movies found. Add one!</div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<footer class="admin-footer">© 2025 TICK.IT — Admin Panel</footer>
+
+<!-- ===================== ADD / EDIT MODAL ===================== -->
+<div class="modal-overlay" id="movieModal">
+    <div class="modal-box">
+        <button class="modal-close" onclick="closeModal()">×</button>
+        <div class="modal-title" id="modalTitle">Add Movie</div>
+
+        <form method="POST" id="movieForm" enctype="multipart/form-data">
+            <input type="hidden" name="movie_id" id="movieId">
+            <input type="hidden" name="_action" id="formAction" value="add">
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Title *</label>
+                    <input type="text" name="title" id="fTitle" class="form-control"
+                           placeholder="Movie title" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Genre *</label>
+                    <input type="text" name="genre" id="fGenre" class="form-control"
+                           placeholder="e.g. Action / Sci-Fi" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Cast Members</label>
+                <input type="text" name="cast_members" id="fCast" class="form-control"
+                       placeholder="e.g. John Doe, Jane Smith">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Duration (mins) *</label>
+                    <input type="number" name="duration_mins" id="fDuration" class="form-control"
+                           placeholder="120" min="1" max="360" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Rating (0–10)</label>
+                    <input type="number" name="rating" id="fRating" class="form-control"
+                           placeholder="8.5" min="0" max="10" step="0.1">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Release Date</label>
+                    <input type="date" name="release_date" id="fReleaseDate" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Status *</label>
+                    <select name="status" id="fStatus" class="form-control">
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea name="description" id="fDesc" class="form-control"
+                          placeholder="Short movie description..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Poster Image</label>
+                <input type="file" name="poster" id="fPoster" class="form-control"
+                       accept="image/*" style="padding:10px 14px;height:auto;cursor:pointer;">
+                <div id="posterHint" style="font-size:11px;color:#666;margin-top:4px;">
+                    Leave blank to keep existing poster.
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn-cancel" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn-submit" id="submitBtn">Add Movie</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ===================== DELETE CONFIRM MODAL ===================== -->
+<div class="modal-overlay" id="deleteModal">
+    <div class="modal-box" style="max-width:400px;">
+        <button class="modal-close" onclick="closeDeleteModal()">×</button>
+        <div class="modal-title">🗑️ Delete Movie</div>
+        <p class="confirm-text">Are you sure you want to delete</p>
+        <p class="confirm-movie-name" id="deleteMovieName"></p>
+        <p class="confirm-text" style="margin-top:8px;color:#ff9999;">
+            This will also remove all associated showings and seats.
+        </p>
+        <form method="POST" action="/admin/movies/delete">
+            <input type="hidden" name="movie_id" id="deleteMovieId">
+            <div class="modal-footer">
+                <button type="button" class="btn-cancel" onclick="closeDeleteModal()">Cancel</button>
+                <button type="submit" class="btn-submit" style="background:#cc0000;">Delete</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// ── Filter ─────────────────────────────────────────────────────
+function filterTable() {
+    const q  = document.getElementById('movieSearch').value.toLowerCase();
+    const st = document.getElementById('statusFilter').value;
+    document.querySelectorAll('.movie-row').forEach(row => {
+        const titleMatch  = row.dataset.title.includes(q);
+        const statusMatch = !st || row.dataset.status === st;
+        row.style.display = (titleMatch && statusMatch) ? '' : 'none';
+    });
+}
+
+// ── Add modal ──────────────────────────────────────────────────
+function openAddModal() {
+    document.getElementById('modalTitle').textContent = '➕ Add Movie';
+    document.getElementById('movieForm').action       = '/admin/movies/add';
+    document.getElementById('formAction').value       = 'add';
+    document.getElementById('submitBtn').textContent  = 'Add Movie';
+    document.getElementById('movieId').value          = '';
+    document.getElementById('posterHint').textContent = 'Upload a poster image (JPG, PNG).';
+    ['fTitle','fGenre','fCast','fDuration','fRating','fReleaseDate','fDesc'].forEach(id => {
+        document.getElementById(id).value = '';
+    });
+    document.getElementById('fStatus').value = 'active';
+    document.getElementById('movieModal').classList.add('open');
+}
+
+// ── Edit modal — reads data-* attributes from the row ──────────
+function openEditModal(btn) {
+    const row = btn.closest('tr');
+
+    document.getElementById('modalTitle').textContent = '✏️ Edit Movie';
+    document.getElementById('movieForm').action       = '/admin/movies/edit/' + row.dataset.id;
+    document.getElementById('formAction').value       = 'edit';
+    document.getElementById('submitBtn').textContent  = 'Save Changes';
+    document.getElementById('movieId').value          = row.dataset.id;
+
+    // Decode HTML entities back to normal text for the input fields
+    document.getElementById('fTitle').value       = decodeAttr(row.dataset.mtitle);
+    document.getElementById('fGenre').value       = decodeAttr(row.dataset.genre);
+    document.getElementById('fCast').value        = decodeAttr(row.dataset.cast);
+    document.getElementById('fDuration').value    = row.dataset.duration  || '';
+    document.getElementById('fRating').value      = row.dataset.rating    || '';
+    document.getElementById('fReleaseDate').value = row.dataset.release   || '';
+    document.getElementById('fDesc').value        = decodeAttr(row.dataset.desc);
+    document.getElementById('fStatus').value      = row.dataset.mstatus   || 'active';
+    document.getElementById('posterHint').textContent = 'Leave blank to keep existing poster.';
+
+    document.getElementById('movieModal').classList.add('open');
+}
+
+// Helper: decode &quot; and &#39; back to " and '
+function decodeAttr(str) {
+    const txt = document.createElement('textarea');
+    txt.innerHTML = str || '';
+    return txt.value;
+}
+
+function closeModal() {
+    document.getElementById('movieModal').classList.remove('open');
+}
+
+// ── Delete modal ───────────────────────────────────────────────
+function confirmDelete(btn) {
+    const row = btn.closest('tr');
+    document.getElementById('deleteMovieId').value         = row.dataset.id;
+    document.getElementById('deleteMovieName').textContent = '"' + decodeAttr(row.dataset.mtitle) + '"?';
+    document.getElementById('deleteModal').classList.add('open');
+}
+
+function closeDeleteModal() {
+    document.getElementById('deleteModal').classList.remove('open');
+}
+
+// Close modals when clicking outside
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', e => {
+        if (e.target === overlay) overlay.classList.remove('open');
+    });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TICK.IT - Sign In</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='login.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <!-- NAVBAR -->
+    <nav class="navbar" style="position:relative;">
+        <div class="logo">TICK.<span>IT</span></div>
+        <!-- Centered nav buttons -->
+        <div style="position:absolute;left:50%;transform:translateX(-50%);display:flex;gap:10px;align-items:center;">
+            <a href="/movies" class="nav-btn">Movies</a>
+            <a href="/home"   class="nav-btn">Home</a>
+            <a href="/booking" class="nav-btn">Booking</a>
+        </div>
+        <!-- Right: Sign In / Sign Up -->
+        <div class="nav-auth-links" style="margin-left:auto;">
+            <a href="/login"    class="nav-auth-btn active">Sign In</a>
+            <a href="/register" class="nav-auth-btn">Sign Up</a>
+        </div>
+    </nav>
+
+    <!-- MAIN -->
+    <main class="main-bg">
+        <div class="bg-overlay"></div>
+
+        <div class="login-card">
+            <h1 class="login-title">Enter your info to Sign in</h1>
+            <p class="login-sub">or get started with a <a href="/register" class="new-account-link">new account</a></p>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endwith %}
+
+            {% if errors.general %}
+                <div class="alert alert-error">{{ errors.general }}</div>
+            {% endif %}
+
+            <form method="POST" action="/login" novalidate>
+                <div class="input-group">
+                    <input type="text" name="identifier"
+                        class="login-input {% if errors.identifier %}input-error{% endif %}"
+                        placeholder="Email or mobile number"
+                        value="{{ form.identifier or '' }}">
+                    {% if errors.identifier %}
+                        <span class="error-msg">{{ errors.identifier }}</span>
+                    {% endif %}
+                </div>
+
+                <div class="input-group password-group">
+                    <input type="password" name="password" id="loginPassword"
+                        class="login-input {% if errors.password %}input-error{% endif %}"
+                        placeholder="Password">
+                    <button type="button" class="eye-btn" onclick="togglePw('loginPassword', this)">&#128065;</button>
+                    {% if errors.password %}
+                        <span class="error-msg">{{ errors.password }}</span>
+                    {% endif %}
+                </div>
+
+                <div class="forgot-row">
+                    <a href="/forgot-password" class="forgot-link">Forgot password?</a>
+                </div>
+
+                <button type="submit" class="continue-btn">Continue</button>
+            </form>
+        </div>
+    </main>
+
+    <div class="footer-bar">
+        <p class="footer-text">&#169; All rights reserved</p>
+    </div>
+
+    <script>
+        function togglePw(id, btn) {
+            const inp = document.getElementById(id);
+            inp.type = inp.type === 'password' ? 'text' : 'password';
+            btn.innerHTML = inp.type === 'password' ? '&#128065;' : '&#128064;';
+        }
+    </script>
+</body>
+</html>

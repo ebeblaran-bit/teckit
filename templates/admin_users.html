@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TICK.IT — Manage Users</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="admin-header">
+    <div class="admin-logo">TICK.<span>IT</span></div>
+    <div class="admin-title-bar">Users Management</div>
+    <div class="admin-header-right">
+        <span style="font-size:13px;color:#888;">Admin</span>
+        <a href="/admin/logout" class="admin-logout-btn">Logout</a>
+    </div>
+</header>
+
+<div class="admin-body">
+    <!-- SIDEBAR -->
+    <nav class="admin-sidebar">
+        <span class="sidebar-label">Main</span>
+        <a href="/admin" class="sidebar-link">
+            <span class="sidebar-icon">📊</span><span>Dashboard</span>
+        </a>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-label">Manage</span>
+        <a href="/admin/movies" class="sidebar-link">
+            <span class="sidebar-icon">🎬</span><span>Movies</span>
+        </a>
+        <a href="/admin/bookings" class="sidebar-link">
+            <span class="sidebar-icon">🎟️</span><span>Bookings</span>
+        </a>
+        <a href="/admin/halls" class="sidebar-link">
+            <span class="sidebar-icon">🏛️</span><span>Halls</span>
+        </a>
+        <a href="/admin/verifications" class="sidebar-link">
+            <span class="sidebar-icon">🪪</span><span>Verifications</span>
+        </a>
+        <a href="/admin/payments" class="sidebar-link">
+            <span class="sidebar-icon">💳</span><span>Payments</span>
+        </a>
+        <a href="/admin/users" class="sidebar-link active">
+            <span class="sidebar-icon">👥</span><span>Users</span>
+        </a>
+        <div class="sidebar-divider"></div>
+        <a href="/home" class="sidebar-link">
+            <span class="sidebar-icon">🏠</span><span>Main Site</span>
+        </a>
+
+    </nav>
+
+    <!-- MAIN -->
+    <main class="admin-main">
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for cat, msg in messages %}
+                <div class="alert alert-{{ cat }}">{{ msg }}</div>
+            {% endfor %}
+        {% endwith %}
+
+        <div class="page-heading">👥 All Users</div>
+
+        <!-- FILTERS -->
+        <div class="filter-bar">
+            <input type="text" class="filter-search" id="userSearch"
+                   placeholder="🔍 Search name, email, phone..."
+                   oninput="filterUsers()">
+            <select class="filter-select" id="genderFilter" onchange="filterUsers()">
+                <option value="">All Genders</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+            </select>
+        </div>
+
+        <!-- TABLE -->
+        <div class="admin-panel">
+            <div class="panel-body" style="padding:0;">
+                <div class="admin-table-wrap">
+                    <table class="admin-table" id="usersTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Full Name</th>
+                                <th>Age</th>
+                                <th>Gender</th>
+                                <th>Address</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th>Bookings</th>
+                                <th>Joined</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersBody">
+                            {% for u in users %}
+                            <tr data-search="{{ (u.full_name ~ ' ' ~ (u.email or '') ~ ' ' ~ (u.mobile or ''))|lower }}"
+                                data-gender="{{ (u.gender or '')|lower }}">
+                                <td style="color:#666;font-size:12px;">#{{ u.id }}</td>
+                                <td style="font-weight:700;min-width:140px;">{{ u.full_name }}</td>
+                                <td style="text-align:center;">{{ u.age or '—' }}</td>
+                                <td>{{ u.gender or '—' }}</td>
+                                <td style="font-size:12px;color:#aaa;max-width:180px;">{{ u.address or '—' }}</td>
+                                <td style="font-size:12px;">{{ u.email or '—' }}</td>
+                                <td style="font-size:12px;white-space:nowrap;">{{ u.mobile or '—' }}</td>
+                                <td style="text-align:center;">
+                                    <span style="font-weight:700;color:{% if u.booking_count > 0 %}#4caf50{% else %}#555{% endif %};">
+                                        {{ u.booking_count }}
+                                    </span>
+                                </td>
+                                <td style="font-size:12px;white-space:nowrap;color:#888;">
+                                    {{ u.created_at.strftime('%Y-%m-%d') if u.created_at else '—' }}
+                                </td>
+                                <td>
+                                    <div class="tbl-actions">
+                                        <button class="tbl-btn tbl-btn-view"
+                                            onclick="viewUser({{ u|tojson }})">View</button>
+                                        <form method="POST" action="/admin/users/delete" style="display:inline;">
+                                            <input type="hidden" name="user_id" value="{{ u.id }}">
+                                            <button type="submit" class="tbl-btn tbl-btn-delete"
+                                                onclick="return confirm('Delete user {{ u.full_name|e }}? This cannot be undone.')">
+                                                Delete
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="10">
+                                <div class="empty-state">
+                                    <div class="empty-state-icon">👥</div>
+                                    <div class="empty-state-text">No users registered yet.</div>
+                                </div>
+                            </td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<footer class="admin-footer">© 2025 TICK.IT — Admin Panel</footer>
+
+<!-- USER DETAIL MODAL -->
+<div class="modal-overlay" id="userModal">
+    <div class="modal-box" style="max-width:460px;">
+        <button class="modal-close" onclick="closeUserModal()">×</button>
+        <div class="modal-title">👤 User Details</div>
+        <div id="userDetailBody"></div>
+    </div>
+</div>
+
+<script>
+function filterUsers() {
+    const q  = document.getElementById('userSearch').value.toLowerCase();
+    const g  = document.getElementById('genderFilter').value.toLowerCase();
+    document.querySelectorAll('#usersBody tr[data-search]').forEach(row => {
+        const searchMatch  = row.dataset.search.includes(q);
+        const genderMatch  = !g || row.dataset.gender === g;
+        row.style.display  = searchMatch && genderMatch ? '' : 'none';
+    });
+}
+
+function viewUser(u) {
+    const fields = [
+        ['Full Name', u.full_name],
+        ['Age',       u.age || '—'],
+        ['Gender',    u.gender || '—'],
+        ['Address',   u.address || '—'],
+        ['Email',     u.email || '—'],
+        ['Phone',     u.mobile || '—'],
+        ['Bookings',  u.booking_count],
+        ['Joined',    u.created_at ? u.created_at.slice(0,10) : '—'],
+    ];
+    let html = '<div style="display:grid;gap:12px;">';
+    fields.forEach(([label, val]) => {
+        html += `<div style="display:flex;gap:12px;border-bottom:1px solid #200000;padding-bottom:10px;">
+            <span style="width:100px;font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;flex-shrink:0;">${label}</span>
+            <span style="color:#fff;font-size:14px;">${val}</span>
+        </div>`;
+    });
+    html += '</div>';
+    document.getElementById('userDetailBody').innerHTML = html;
+    document.getElementById('userModal').classList.add('open');
+}
+function closeUserModal() {
+    document.getElementById('userModal').classList.remove('open');
+}
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', e => {
+        if (e.target === overlay) overlay.classList.remove('open');
+    });
+});
+</script>
+</body>
+</html>

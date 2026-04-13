@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TICK.IT — Secure Payment</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='booking.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        /* ── Layout ───────────────────────────────────────────── */
+        .pay-page {
+            min-height: calc(100vh - 70px);
+            display: flex; align-items: flex-start; justify-content: center;
+            padding: 36px 20px 60px;
+            gap: 28px; flex-wrap: wrap;
+        }
+
+        /* ── Progress Strip ──────────────────────────────────── */
+        .progress-strip {
+            background: #111; border-bottom: 1px solid #200000;
+            padding: 12px 32px; display: flex; justify-content: center;
+        }
+        .progress-steps {
+            display: flex; align-items: center; gap: 0;
+        }
+        .p-step {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 12px; font-weight: 700; color: #555;
+        }
+        .p-step.done  { color: #4caf50; }
+        .p-step.active { color: #CE0000; }
+        .p-dot {
+            width: 22px; height: 22px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 10px; font-weight: 900;
+            background: #333; color: #555; border: 2px solid #444;
+        }
+        .p-step.done  .p-dot { background: rgba(76,175,80,.2); border-color: #4caf50; color: #4caf50; }
+        .p-step.active .p-dot { background: rgba(206,0,0,.2); border-color: #CE0000; color: #CE0000; }
+        .p-line { width: 48px; height: 2px; background: #333; margin: 0 4px; flex-shrink: 0; }
+        .p-line.done { background: #4caf50; }
+
+        /* ── Booking Summary Card ─────────────────────────────── */
+        .summary-card {
+            width: 310px; flex-shrink: 0;
+            background: #0d0000; border: 1px solid #300000;
+            border-radius: 18px; overflow: hidden;
+        }
+        .summary-poster {
+            width: 100%; height: 160px; object-fit: cover;
+            object-position: center top; display: block;
+        }
+        .summary-body { padding: 18px; }
+        .summary-movie { font-size: 17px; font-weight: 900; color: #fff; margin-bottom: 14px; line-height: 1.2; }
+        .summary-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 0; border-bottom: 1px solid #1a0000;
+            font-size: 12px;
+        }
+        .summary-row:last-child { border-bottom: none; }
+        .s-label { color: #666; font-weight: 600; }
+        .s-value { color: #fff; font-weight: 700; text-align: right; max-width: 170px; }
+        .summary-total {
+            margin-top: 14px; padding: 14px; background: rgba(206,0,0,0.12);
+            border: 1px solid #300000; border-radius: 10px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .total-label { font-size: 13px; font-weight: 700; color: #aaa; }
+        .total-amount { font-size: 24px; font-weight: 900; color: #fff; }
+
+        /* Countdown */
+        .reservation-timer {
+            display: flex; align-items: center; gap: 8px;
+            padding: 10px 14px; margin-top: 12px;
+            background: rgba(255,170,0,.08); border: 1px solid #997000;
+            border-radius: 8px; font-size: 12px; color: #ffd966;
+        }
+        .timer-icon { font-size: 16px; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+        #countdown { font-weight: 900; font-size: 14px; color: #ff8c00; }
+
+        /* Security badge */
+        .security-badge {
+            display: flex; align-items: center; gap: 8px; margin-top: 12px;
+            font-size: 11px; color: #555; font-weight: 600;
+        }
+
+        /* ── Payment Form Card ─────────────────────────────────── */
+        .payment-card {
+            flex: 1; min-width: 320px; max-width: 500px;
+            background: #0d0000; border: 1px solid #300000;
+            border-radius: 18px; overflow: hidden;
+        }
+        .payment-header {
+            padding: 18px 24px 14px;
+            border-bottom: 1px solid #200000;
+            background: rgba(206,0,0,0.06);
+        }
+        .payment-title { font-size: 18px; font-weight: 900; color: #fff; margin-bottom: 4px; }
+        .payment-sub   { font-size: 12px; color: #666; }
+        .payment-body  { padding: 22px 24px; }
+
+        /* Method Tabs */
+        .method-tabs { display: flex; gap: 10px; margin-bottom: 22px; }
+        .method-tab {
+            flex: 1; height: 52px; border: 2px solid #300000; border-radius: 10px;
+            background: none; cursor: pointer; transition: all 0.2s;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            gap: 3px; font-family: 'Inter', sans-serif;
+        }
+        .method-tab:hover { border-color: #CE0000; background: rgba(206,0,0,0.06); }
+        .method-tab.active {
+            border-color: #CE0000; background: rgba(206,0,0,0.12);
+        }
+        .method-icon { font-size: 18px; }
+        .method-label { font-size: 10px; font-weight: 800; color: #fff; letter-spacing: 0.5px; }
+
+        /* Form fields */
+        .pf-group { margin-bottom: 16px; }
+        .pf-label {
+            display: block; font-size: 11px; font-weight: 700; color: #888;
+            text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
+        }
+        .pf-input {
+            width: 100%; height: 46px; padding: 0 14px;
+            background: rgba(0,0,0,0.6); border: 2px solid #300000;
+            border-radius: 8px; color: #fff; font-size: 14px;
+            font-family: 'Inter', sans-serif; outline: none;
+            transition: border-color 0.2s;
+        }
+        .pf-input:focus { border-color: #CE0000; }
+        .pf-input::placeholder { color: #444; }
+        .pf-row { display: flex; gap: 12px; }
+        .pf-row .pf-group { flex: 1; }
+
+        /* Pay button */
+        .pay-btn {
+            width: 100%; height: 52px; margin-top: 8px;
+            background: #CE0000; border: none; border-radius: 10px;
+            color: #fff; font-weight: 900; font-size: 16px;
+            cursor: pointer; transition: background 0.2s, transform 0.1s;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            font-family: 'Inter', sans-serif;
+        }
+        .pay-btn:hover:not(:disabled) { background: #ff0000; }
+        .pay-btn:active:not(:disabled) { transform: scale(0.98); }
+        .pay-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        /* Spinner */
+        .spinner {
+            width: 20px; height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Result Overlay ────────────────────────────────────── */
+        .result-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.85); z-index: 9999;
+            align-items: center; justify-content: center; padding: 20px;
+        }
+        .result-overlay.show { display: flex; }
+        .result-box {
+            background: #110000; border: 2px solid #300000;
+            border-radius: 20px; padding: 44px 40px; max-width: 440px; width: 100%;
+            text-align: center; animation: popIn .3s ease;
+        }
+        @keyframes popIn { from{transform:scale(.85);opacity:0} to{transform:scale(1);opacity:1} }
+        .result-icon   { font-size: 72px; margin-bottom: 16px; }
+        .result-title  { font-size: 24px; font-weight: 900; color: #fff; margin-bottom: 8px; }
+        .result-msg    { font-size: 14px; color: #aaa; line-height: 1.6; margin-bottom: 22px; }
+        .result-pay-id { font-size: 11px; color: #555; margin-bottom: 24px; font-family: monospace; }
+        .result-actions { display: flex; gap: 12px; justify-content: center; }
+        .r-btn-outline {
+            padding: 10px 22px; border: 2px solid #CE0000; border-radius: 8px;
+            color: #CE0000; text-decoration: none; font-weight: 700; font-size: 14px;
+        }
+        .r-btn-outline:hover { background: #CE0000; color: #fff; }
+        .r-btn-red {
+            padding: 10px 22px; background: #CE0000; border: none; border-radius: 8px;
+            color: #fff; text-decoration: none; font-weight: 700; font-size: 14px; cursor: pointer;
+        }
+        .r-btn-red:hover { background: #ff0000; }
+
+        /* ── Fake card brand detection ─────────────────────────── */
+        .card-brand { font-size: 18px; }
+
+        /* ── Disclaimer ───────────────────────────────────────── */
+        .sim-notice {
+            background: rgba(100,100,255,.08); border: 1px solid #333;
+            border-radius: 8px; padding: 10px 14px; margin-bottom: 16px;
+            font-size: 11px; color: #666; line-height: 1.6; text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar" style="position:relative;">
+    <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;gap:2px;">
+        <div class="logo" style="font-size:1.25rem;letter-spacing:2px;">TICK.<span>IT</span></div>
+    </div>
+    <div style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;">
+        <a href="/movies"  class="nav-btn">Movies</a>
+        <a href="/home"    class="nav-btn">Home</a>
+        <a href="/booking" class="nav-btn">Booking</a>
+    </div>
+    <div class="search-wrap">
+        <a href="/logout" class="logout-btn">Logout</a>
+    </div>
+</nav>
+
+<!-- PROGRESS -->
+<div class="progress-strip">
+    <div class="progress-steps">
+        <div class="p-step done">
+            <div class="p-dot">✓</div><span>Seats</span>
+        </div>
+        <div class="p-line done"></div>
+        <div class="p-step done">
+            <div class="p-dot">✓</div><span>Details</span>
+        </div>
+        <div class="p-line done"></div>
+        <div class="p-step active">
+            <div class="p-dot">3</div><span>Payment</span>
+        </div>
+        <div class="p-line"></div>
+        <div class="p-step">
+            <div class="p-dot">4</div><span>Confirmation</span>
+        </div>
+    </div>
+</div>
+
+<div class="pay-page">
+
+    <!-- ── BOOKING SUMMARY ── -->
+    <div class="summary-card">
+        {% if booking.poster_path %}
+        <img src="{{ url_for('static', filename=booking.poster_path) }}"
+             alt="{{ booking.movie }}" class="summary-poster"
+             onerror="this.style.display='none'">
+        {% endif %}
+        <div class="summary-body">
+            <div class="summary-movie">{{ booking.movie }}</div>
+            <div class="summary-row">
+                <span class="s-label">📍 Cinema</span>
+                <span class="s-value">{{ booking.cinema }}</span>
+            </div>
+            <div class="summary-row">
+                <span class="s-label">📅 Date</span>
+                <span class="s-value">{{ booking.date_fmt }}</span>
+            </div>
+            <div class="summary-row">
+                <span class="s-label">🕐 Showtime</span>
+                <span class="s-value">{{ booking.time_fmt }}</span>
+            </div>
+            <div class="summary-row">
+                <span class="s-label">💺 Seats</span>
+                <span class="s-value">{{ booking.seat_codes }}</span>
+            </div>
+            <div class="summary-row">
+                <span class="s-label">🎫 Type</span>
+                <span class="s-value">{{ booking.ticket_type }}</span>
+            </div>
+            <div class="summary-row">
+                <span class="s-label">🎟️ Count</span>
+                <span class="s-value">{{ booking.ticket_count }} ticket(s)</span>
+            </div>
+
+            <div class="summary-total">
+                <div class="total-label">TOTAL DUE</div>
+                <div class="total-amount">₱{{ "{:,.0f}".format(booking.total_price) }}</div>
+            </div>
+
+            <!-- Countdown timer -->
+            <div class="reservation-timer">
+                <span class="timer-icon">⏰</span>
+                <span>Seats reserved for <span id="countdown">--:--</span></span>
+            </div>
+
+            <!-- Security -->
+            <div class="security-badge">
+                <span>🔒</span> Secure local payment simulation — no real charges
+            </div>
+        </div>
+    </div>
+
+    <!-- ── PAYMENT FORM ── -->
+    <div class="payment-card">
+        <div class="payment-header">
+            <div class="payment-title">💳 Complete Payment</div>
+            <div class="payment-sub">Choose your payment method and enter details</div>
+        </div>
+        <div class="payment-body">
+
+            <!-- Simulation notice -->
+            <div class="sim-notice">
+                🧪 <strong>Simulation Mode</strong> — This is a local test environment.
+                No real money is charged. Payment succeeds ~80% of the time to simulate real behavior.
+            </div>
+
+            <!-- Payment method tabs -->
+            <div class="method-tabs">
+                <button class="method-tab active" id="tab-gcash" onclick="switchMethod('gcash')">
+                    <span class="method-icon">📱</span>
+                    <span class="method-label">GCash</span>
+                </button>
+                <button class="method-tab" id="tab-credit_card" onclick="switchMethod('credit_card')">
+                    <span class="method-icon">💳</span>
+                    <span class="method-label">Credit Card</span>
+                </button>
+                <button class="method-tab" id="tab-debit_card" onclick="switchMethod('debit_card')">
+                    <span class="method-icon">🏦</span>
+                    <span class="method-label">Debit Card</span>
+                </button>
+            </div>
+
+            <!-- GCash Form -->
+            <div id="form-gcash">
+                <div class="pf-group">
+                    <label class="pf-label">GCash Mobile Number</label>
+                    <input type="tel" class="pf-input" id="gcash-number"
+                           placeholder="09XX XXX XXXX" maxlength="11"
+                           oninput="formatPhone(this)">
+                </div>
+                <div class="pf-group">
+                    <label class="pf-label">GCash PIN (4 digits)</label>
+                    <input type="password" class="pf-input" id="gcash-pin"
+                           placeholder="• • • •" maxlength="4">
+                </div>
+                <div style="background:rgba(0,180,0,.08);border:1px solid #1a5c1a;border-radius:8px;padding:10px 14px;font-size:12px;color:#7fff7f;margin-bottom:14px;line-height:1.5;">
+                    ✅ GCash will send a one-time PIN to verify your payment.
+                </div>
+            </div>
+
+            <!-- Credit / Debit Card Form -->
+            <div id="form-credit_card" style="display:none;">
+                <div class="pf-group">
+                    <label class="pf-label">Card Number <span id="card-brand" class="card-brand"></span></label>
+                    <input type="text" class="pf-input" id="card-number"
+                           placeholder="1234 5678 9012 3456" maxlength="19"
+                           oninput="formatCard(this)">
+                </div>
+                <div class="pf-row">
+                    <div class="pf-group">
+                        <label class="pf-label">Expiry Date</label>
+                        <input type="text" class="pf-input" id="card-expiry"
+                               placeholder="MM / YY" maxlength="7"
+                               oninput="formatExpiry(this)">
+                    </div>
+                    <div class="pf-group">
+                        <label class="pf-label">CVV</label>
+                        <input type="password" class="pf-input" id="card-cvv"
+                               placeholder="•••" maxlength="4">
+                    </div>
+                </div>
+                <div class="pf-group">
+                    <label class="pf-label">Cardholder Name</label>
+                    <input type="text" class="pf-input" id="card-name"
+                           placeholder="Name as on card">
+                </div>
+            </div>
+
+            <!-- Debit Card (same form) -->
+            <div id="form-debit_card" style="display:none;">
+                <div class="pf-group">
+                    <label class="pf-label">Card Number</label>
+                    <input type="text" class="pf-input" id="debit-number"
+                           placeholder="1234 5678 9012 3456" maxlength="19"
+                           oninput="formatCard(this)">
+                </div>
+                <div class="pf-row">
+                    <div class="pf-group">
+                        <label class="pf-label">Expiry Date</label>
+                        <input type="text" class="pf-input" id="debit-expiry"
+                               placeholder="MM / YY" maxlength="7"
+                               oninput="formatExpiry(this)">
+                    </div>
+                    <div class="pf-group">
+                        <label class="pf-label">CVV</label>
+                        <input type="password" class="pf-input" id="debit-cvv"
+                               placeholder="•••" maxlength="4">
+                    </div>
+                </div>
+                <div class="pf-group">
+                    <label class="pf-label">Cardholder Name</label>
+                    <input type="text" class="pf-input" id="debit-name"
+                           placeholder="Name as on card">
+                </div>
+            </div>
+
+            <!-- Error message -->
+            <div id="pay-error" style="display:none;background:rgba(204,0,0,.15);border:1px solid #cc0000;border-radius:8px;padding:10px 14px;font-size:13px;color:#ff9999;margin-bottom:12px;"></div>
+
+            <!-- PAY BUTTON -->
+            <button class="pay-btn" id="payBtn" onclick="processPayment()">
+                <span id="payBtnLabel">Pay ₱{{ "{:,.0f}".format(booking.total_price) }}</span>
+                <span id="payBtnArrow">→</span>
+            </button>
+
+            <!-- Cancel link -->
+            <div style="text-align:center;margin-top:14px;">
+                <a href="/payment/cancel?ref={{ booking.ref_code }}"
+                   style="font-size:12px;color:#555;text-decoration:underline;"
+                   onclick="return confirm('Cancel payment? Your seats will be released.')">
+                   Cancel and release seats
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── RESULT OVERLAY ── -->
+<div class="result-overlay" id="resultOverlay">
+    <div class="result-box" id="resultBox">
+        <div class="result-icon" id="resultIcon">⏳</div>
+        <div class="result-title" id="resultTitle">Processing…</div>
+        <div class="result-msg" id="resultMsg">Please wait while we confirm your payment.</div>
+        <div class="result-pay-id" id="resultPayId"></div>
+        <div class="result-actions" id="resultActions" style="display:none;"></div>
+    </div>
+</div>
+
+<div class="footer-bar"><p class="footer-text">© 2025 TICK.IT — All rights reserved</p></div>
+
+<script>
+// ── STATE ─────────────────────────────────────────────────────
+const REF_CODE   = '{{ booking.ref_code }}';
+let activeMethod = 'gcash';
+
+// ── COUNTDOWN ─────────────────────────────────────────────────
+let secsLeft = {{ secs_left }};
+const countEl = document.getElementById('countdown');
+function tick() {
+    if (secsLeft <= 0) {
+        countEl.textContent = 'EXPIRED';
+        countEl.style.color = '#ff4444';
+        document.getElementById('payBtn').disabled = true;
+        document.getElementById('payBtnLabel').textContent = 'Reservation Expired';
+        document.getElementById('payBtnArrow').textContent = '';
+        return;
+    }
+    const m = Math.floor(secsLeft / 60);
+    const s = secsLeft % 60;
+    countEl.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    secsLeft--;
+    setTimeout(tick, 1000);
+}
+tick();
+
+// ── METHOD SWITCHING ──────────────────────────────────────────
+function switchMethod(method) {
+    activeMethod = method;
+    ['gcash','credit_card','debit_card'].forEach(m => {
+        document.getElementById(`form-${m}`).style.display = m === method ? '' : 'none';
+        document.getElementById(`tab-${m}`).classList.toggle('active', m === method);
+    });
+}
+
+// ── INPUT FORMATTERS ──────────────────────────────────────────
+function formatCard(inp) {
+    let v = inp.value.replace(/\D/g, '').slice(0, 16);
+    inp.value = v.replace(/(.{4})/g, '$1 ').trim();
+    // Detect brand
+    const brand = document.getElementById('card-brand');
+    if (brand) {
+        if (/^4/.test(v))       brand.textContent = '💳 Visa';
+        else if (/^5[1-5]/.test(v)) brand.textContent = '💳 Mastercard';
+        else if (/^3[47]/.test(v))  brand.textContent = '💳 Amex';
+        else brand.textContent = '';
+    }
+}
+function formatExpiry(inp) {
+    let v = inp.value.replace(/\D/g, '').slice(0, 4);
+    if (v.length > 2) v = v.slice(0,2) + ' / ' + v.slice(2);
+    inp.value = v;
+}
+function formatPhone(inp) {
+    inp.value = inp.value.replace(/[^\d+]/g, '');
+}
+
+// ── VALIDATION ────────────────────────────────────────────────
+function validate() {
+    if (activeMethod === 'gcash') {
+        const ph = document.getElementById('gcash-number').value.replace(/\D/g,'');
+        if (!/^(09|\+639)\d{9}$/.test(ph) && !/^09\d{9}$/.test(ph) && ph.length !== 11)
+            return 'Enter a valid GCash number (09XXXXXXXXX).';
+        const pin = document.getElementById('gcash-pin').value;
+        if (!/^\d{4}$/.test(pin)) return 'GCash PIN must be 4 digits.';
+    } else {
+        const prefix  = activeMethod === 'credit_card' ? 'card' : 'debit';
+        const num     = document.getElementById(`${prefix}-number`).value.replace(/\s/g,'');
+        const expiry  = document.getElementById(`${prefix}-expiry`).value;
+        const cvv     = document.getElementById(`${prefix}-cvv`).value;
+        const name    = document.getElementById(`${prefix}-name`).value.trim();
+        if (num.length < 13) return 'Enter a valid card number (13–16 digits).';
+        if (!/^\d{2} \/ \d{2}$/.test(expiry)) return 'Enter expiry as MM / YY.';
+        const [mm, yy] = expiry.split(' / ').map(Number);
+        const now = new Date(); const exp = new Date(2000+yy, mm-1);
+        if (exp < now) return 'Card is expired.';
+        if (mm < 1 || mm > 12) return 'Invalid expiry month.';
+        if (!/^\d{3,4}$/.test(cvv)) return 'CVV must be 3–4 digits.';
+        if (!name) return 'Enter cardholder name.';
+    }
+    return null;
+}
+
+// ── PROCESS PAYMENT ───────────────────────────────────────────
+async function processPayment() {
+    if (secsLeft <= 0) {
+        showError('Your seat reservation has expired. Please book again.');
+        return;
+    }
+
+    const errMsg = validate();
+    if (errMsg) { showError(errMsg); return; }
+
+    hideError();
+    setLoading(true);
+    showOverlay('processing');
+
+    // Simulate network latency (1.5–3s for realism)
+    await sleep(1500 + Math.random() * 1500);
+
+    try {
+        const body = new FormData();
+        body.append('ref_code', REF_CODE);
+        body.append('payment_method', activeMethod);
+
+        const res  = await fetch('/payment/process', { method: 'POST', body });
+        const data = await res.json();
+
+        if (!data.ok && data.status !== 'paid' && data.status !== 'pending') {
+            showOverlay('error', data.msg || 'An unexpected error occurred.');
+        } else {
+            showOverlay(data.status, data.msg, data.payment_id);
+        }
+    } catch (e) {
+        showOverlay('error', 'Network error. Please try again.');
+    } finally {
+        setLoading(false);
+    }
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function setLoading(on) {
+    const btn = document.getElementById('payBtn');
+    btn.disabled = on;
+    if (on) {
+        btn.innerHTML = '<div class="spinner"></div><span>Processing payment…</span>';
+    } else {
+        btn.innerHTML = `<span id="payBtnLabel">Pay ₱{{ "{:,.0f}".format(booking.total_price) }}</span><span id="payBtnArrow">→</span>`;
+    }
+}
+
+function showError(msg) {
+    const el = document.getElementById('pay-error');
+    el.textContent = '⚠️ ' + msg;
+    el.style.display = 'block';
+}
+function hideError() {
+    document.getElementById('pay-error').style.display = 'none';
+}
+
+// ── RESULT OVERLAY ────────────────────────────────────────────
+function showOverlay(status, msg, payId) {
+    const overlay = document.getElementById('resultOverlay');
+    const icon    = document.getElementById('resultIcon');
+    const title   = document.getElementById('resultTitle');
+    const msgEl   = document.getElementById('resultMsg');
+    const payEl   = document.getElementById('resultPayId');
+    const actions = document.getElementById('resultActions');
+
+    overlay.classList.add('show');
+
+    if (status === 'processing') {
+        icon.textContent  = '⏳';
+        title.textContent = 'Processing Payment…';
+        msgEl.textContent = 'Connecting to payment gateway. Please do not close this page.';
+        payEl.textContent = '';
+        actions.style.display = 'none';
+        return;
+    }
+
+    if (status === 'paid') {
+        icon.textContent  = '🎉';
+        title.textContent = 'Payment Successful!';
+        msgEl.textContent = msg || 'Your booking is confirmed!';
+        document.getElementById('resultBox').style.borderColor = '#4caf50';
+        payEl.textContent = payId ? `Payment ID: ${payId}` : '';
+        actions.style.display = 'flex';
+        actions.innerHTML = `
+            <a href="/my-bookings" class="r-btn-outline">My Bookings</a>
+            <a href="/payment/result?ref=${REF_CODE}" class="r-btn-red">View Receipt →</a>
+        `;
+    } else if (status === 'failed') {
+        icon.textContent  = '❌';
+        title.textContent = 'Payment Failed';
+        msgEl.textContent = msg || 'Payment was declined. Please try a different method.';
+        document.getElementById('resultBox').style.borderColor = '#cc0000';
+        payEl.textContent = payId ? `Transaction ID: ${payId}` : '';
+        actions.style.display = 'flex';
+        actions.innerHTML = `
+            <a href="/booking" class="r-btn-outline">Try Again</a>
+            <a href="/home" class="r-btn-red">Go Home</a>
+        `;
+    } else if (status === 'pending') {
+        icon.textContent  = '⏳';
+        title.textContent = 'Payment Pending';
+        msgEl.textContent = msg || 'Your payment is being verified. We\'ll update you shortly.';
+        document.getElementById('resultBox').style.borderColor = '#cc8800';
+        payEl.textContent = payId ? `Reference: ${payId}` : '';
+        actions.style.display = 'flex';
+        actions.innerHTML = `
+            <a href="/my-bookings" class="r-btn-outline">My Bookings</a>
+            <a href="/payment/result?ref=${REF_CODE}" class="r-btn-red">Check Status →</a>
+        `;
+    } else {
+        icon.textContent  = '⚠️';
+        title.textContent = 'Something went wrong';
+        msgEl.textContent = msg || 'Please try again.';
+        actions.style.display = 'flex';
+        actions.innerHTML = `
+            <button onclick="document.getElementById('resultOverlay').classList.remove('show')" class="r-btn-red">Try Again</button>
+        `;
+    }
+}
+</script>
+</body>
+</html>
