@@ -1,6 +1,7 @@
 from flask import (Flask, render_template, request, redirect,
                    url_for, session, flash, jsonify)
-import mysql.connector, bcrypt, re, uuid, os, string, random
+import mysql.connector, bcrypt, re, uuid, os, string, random, base64
+import urllib.request, urllib.parse, json as _json
 from functools import wraps
 from datetime import datetime, date, timedelta
 
@@ -46,6 +47,58 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 PAY_SUCCESS_RATE = 0.80
 PAY_FAILED_RATE  = 0.15
 # PAY_PENDING_RATE = 0.05  (remainder)
+
+
+# ─────────────────────────────────────────────────────────────
+#  PAYMONGO CONFIG
+#  Set your real PayMongo secret key here (from dashboard.paymongo.com)
+# ─────────────────────────────────────────────────────────────
+PAYMONGO_SECRET_KEY = os.environ.get('PAYMONGO_SECRET_KEY', '')  # set in environment or replace here
+PAYMONGO_BASE       = 'https://api.paymongo.com/v1'
+
+def _pm_headers():
+    token = base64.b64encode(f'{PAYMONGO_SECRET_KEY}:'.encode()).decode()
+    return {
+        'Authorization': f'Basic {token}',
+        'Content-Type':  'application/json',
+        'Accept':        'application/json',
+    }
+
+def _pm_post(path, payload):
+    """Call PayMongo API. Returns (data_dict, error_str)."""
+    if not PAYMONGO_SECRET_KEY:
+        return None, 'PayMongo secret key not configured.'
+    try:
+        data = _json.dumps(payload).encode()
+        req  = urllib.request.Request(
+            PAYMONGO_BASE + path,
+            data=data, headers=_pm_headers(), method='POST'
+        )
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return _json.loads(r.read()), None
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode()
+        try:
+            err_json = _json.loads(err_body)
+            msg = err_json.get('errors', [{}])[0].get('detail', err_body)
+        except Exception:
+            msg = err_body
+        return None, msg
+    except Exception as ex:
+        return None, str(ex)
+
+def _pm_get(path):
+    """GET PayMongo resource. Returns (data_dict, error_str)."""
+    if not PAYMONGO_SECRET_KEY:
+        return None, 'PayMongo secret key not configured.'
+    try:
+        req = urllib.request.Request(
+            PAYMONGO_BASE + path, headers=_pm_headers(), method='GET'
+        )
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return _json.loads(r.read()), None
+    except Exception as ex:
+        return None, str(ex)
 
 RESERVATION_MINUTES = 15   # seat lock duration
 
@@ -176,6 +229,7 @@ def seed_seats_from_hall(db, showing_id, hall_id):
 
     total = 0
     for sc in seat_configs:
+        # Map seat_type to DB category enum (VIP or Standard; PWD maps to Standard)
         category = 'VIP' if sc['seat_type'] == 'VIP' else 'Standard'
         execute(db, """
             INSERT IGNORE INTO seats
@@ -225,15 +279,21 @@ def ensure_future_showings(db, movie_id, cinema_id, days_ahead=3):
     """, (movie_id, cinema_id, today, limit), one=True)
 
     if row['cnt'] < 2:
+        # Find hall for this cinema (use first configured hall)
+        hall = query(db,
+            "SELECT id FROM cinema_halls WHERE cinema_id=%s ORDER BY id LIMIT 1",
+            (cinema_id,), one=True)
+        hall_id = hall['id'] if hall else None
+
         timeslots = ['10:00:00', '13:30:00', '16:30:00', '19:30:00', '22:00:00']
         for d in range(0, days_ahead + 1):
             show_date = (date.today() + timedelta(days=d)).isoformat()
             for t in timeslots:
                 execute(db, """
                     INSERT IGNORE INTO showings
-                        (movie_id, cinema_id, show_date, show_time, status)
-                    VALUES (%s,%s,%s,%s,'open')
-                """, (movie_id, cinema_id, show_date, t))
+                        (movie_id, cinema_id, hall_id, show_date, show_time, status)
+                    VALUES (%s,%s,%s,%s,%s,'open')
+                """, (movie_id, cinema_id, hall_id, show_date, t))
         db.commit()
 
 def get_movies_with_status(db):
@@ -601,8 +661,238 @@ def confirm_booking():
         flash(f'Booking error: {str(e)}', 'error')
         return redirect(url_for('booking', showing_id=showing_id))
 
+
 # ─────────────────────────────────────────────────────────────
-#  FAKE PAYMENT CHECKOUT  (local simulation, no real API)
+#  PAYMONGO — Create Source (GCash / Maya)
+# ─────────────────────────────────────────────────────────────
+@app.route('/payment/create-source', methods=['POST'])
+@login_required
+def payment_create_source():
+    data       = request.get_json(force=True)
+    ref_code   = data.get('ref_code', '').strip()
+    pay_type   = data.get('type', 'gcash')   # gcash | paymaya
+
+    if pay_type not in ('gcash', 'paymaya'):
+        return jsonify({'ok': False, 'msg': 'Unsupported source type.'})
+
+    db = get_db()
+    booking = query(db, """
+        SELECT total_price FROM bookings WHERE ref_code=%s AND user_id=%s LIMIT 1
+    """, (ref_code, session['user_id']), one=True)
+    db.close()
+
+    if not booking:
+        return jsonify({'ok': False, 'msg': 'Booking not found.'})
+
+    amount_cents = int(float(booking['total_price']) * 100)
+    success_url  = url_for('payment_result',  ref=ref_code, _external=True)
+    failed_url   = url_for('payment_cancel',  ref=ref_code, _external=True)
+
+    payload = {
+        'data': {
+            'attributes': {
+                'amount':   amount_cents,
+                'redirect': {'success': success_url, 'failed': failed_url},
+                'type':     pay_type,
+                'currency': 'PHP',
+            }
+        }
+    }
+    result, err = _pm_post('/sources', payload)
+    if err:
+        return jsonify({'ok': False, 'msg': f'PayMongo error: {err}'})
+
+    attrs        = result['data']['attributes']
+    source_id    = result['data']['id']
+    checkout_url = attrs['redirect']['checkout_url']
+
+    # Persist source_id for polling
+    db = get_db()
+    execute(db, """
+        INSERT INTO payments (booking_ref, user_id, amount, payment_method, paymongo_link_id, status)
+        VALUES (%s,%s,%s,%s,%s,'pending')
+        ON DUPLICATE KEY UPDATE paymongo_link_id=%s, status='pending'
+    """, (ref_code, session['user_id'], booking['total_price'], pay_type, source_id, source_id))
+    db.commit(); db.close()
+
+    return jsonify({'ok': True, 'source_id': source_id, 'checkout_url': checkout_url})
+
+
+# ─────────────────────────────────────────────────────────────
+#  PAYMONGO — Poll Source Status (GCash / Maya polling)
+# ─────────────────────────────────────────────────────────────
+@app.route('/payment/poll-source/<source_id>')
+@login_required
+def payment_poll_source(source_id):
+    result, err = _pm_get(f'/sources/{source_id}')
+    if err:
+        return jsonify({'ok': False, 'status': 'error', 'msg': err})
+
+    attrs  = result['data']['attributes']
+    status = attrs.get('status', 'pending')   # pending | chargeable | failed | expired
+
+    if status == 'chargeable':
+        # Create charge now
+        ref_code = request.args.get('ref', '')
+        db = get_db()
+        pay_row = query(db, "SELECT * FROM payments WHERE paymongo_link_id=%s LIMIT 1",
+                        (source_id,), one=True)
+        booking_list = query(db, "SELECT * FROM bookings WHERE ref_code=%s AND user_id=%s",
+                             (ref_code, session['user_id'])) if ref_code else []
+        db.close()
+
+        if pay_row and booking_list and pay_row['status'] != 'paid':
+            amount_cents = int(float(pay_row['amount']) * 100)
+            charge_payload = {
+                'data': {
+                    'attributes': {
+                        'amount':      amount_cents,
+                        'source':      {'id': source_id, 'type': 'source'},
+                        'currency':    'PHP',
+                        'description': f'TICK.IT Booking {ref_code}',
+                    }
+                }
+            }
+            charge_result, charge_err = _pm_post('/payments', charge_payload)
+            if not charge_err:
+                charge_status = charge_result['data']['attributes']['status']
+                if charge_status == 'paid':
+                    _mark_booking_paid(ref_code, source_id,
+                                       attrs.get('type', 'gcash'), pay_row['amount'])
+                    return jsonify({'ok': True, 'status': 'paid'})
+
+    return jsonify({'ok': True, 'status': status})
+
+
+# ─────────────────────────────────────────────────────────────
+#  PAYMONGO — Create Payment Intent (Cards)
+# ─────────────────────────────────────────────────────────────
+@app.route('/payment/create-intent', methods=['POST'])
+@login_required
+def payment_create_intent():
+    data     = request.get_json(force=True)
+    ref_code = data.get('ref_code', '').strip()
+
+    db = get_db()
+    booking = query(db, """
+        SELECT total_price FROM bookings WHERE ref_code=%s AND user_id=%s LIMIT 1
+    """, (ref_code, session['user_id']), one=True)
+    db.close()
+
+    if not booking:
+        return jsonify({'ok': False, 'msg': 'Booking not found.'})
+
+    amount_cents = int(float(booking['total_price']) * 100)
+    payload = {
+        'data': {
+            'attributes': {
+                'amount':                 amount_cents,
+                'payment_method_allowed': ['card'],
+                'currency':               'PHP',
+                'capture_type':           'automatic',
+                'description':            f'TICK.IT Booking {ref_code}',
+            }
+        }
+    }
+    result, err = _pm_post('/payment_intents', payload)
+    if err:
+        return jsonify({'ok': False, 'msg': f'PayMongo error: {err}'})
+
+    intent_id  = result['data']['id']
+    client_key = result['data']['attributes']['client_key']
+
+    db = get_db()
+    execute(db, """
+        INSERT INTO payments (booking_ref, user_id, amount, payment_method, paymongo_link_id, status)
+        VALUES (%s,%s,%s,'card',%s,'pending')
+        ON DUPLICATE KEY UPDATE paymongo_link_id=%s, status='pending'
+    """, (ref_code, session['user_id'], booking['total_price'], intent_id, intent_id))
+    db.commit(); db.close()
+
+    return jsonify({'ok': True, 'intent_id': intent_id, 'client_key': client_key})
+
+
+# ─────────────────────────────────────────────────────────────
+#  PAYMONGO — Confirm Card Payment (after frontend attaches method)
+# ─────────────────────────────────────────────────────────────
+@app.route('/payment/confirm-intent', methods=['POST'])
+@login_required
+def payment_confirm_intent():
+    data       = request.get_json(force=True)
+    ref_code   = data.get('ref_code', '').strip()
+    intent_id  = data.get('intent_id', '').strip()
+    pm_status  = data.get('status', '')
+
+    if pm_status == 'succeeded':
+        db = get_db()
+        pay = query(db, "SELECT amount FROM payments WHERE paymongo_link_id=%s LIMIT 1",
+                    (intent_id,), one=True)
+        db.close()
+        if pay:
+            _mark_booking_paid(ref_code, intent_id, 'card', pay['amount'])
+            return jsonify({'ok': True, 'status': 'paid'})
+    return jsonify({'ok': True, 'status': pm_status})
+
+
+# ─────────────────────────────────────────────────────────────
+#  PAYMONGO — PayMongo Webhook (production)
+# ─────────────────────────────────────────────────────────────
+@app.route('/payment/webhook', methods=['POST'])
+def payment_webhook():
+    payload = request.get_json(force=True)
+    try:
+        event_type = payload['data']['attributes']['type']
+        evt_data   = payload['data']['attributes']['data']
+        if event_type == 'payment.paid':
+            ref_code   = evt_data['attributes'].get('description', '')
+            ref_code   = ref_code.replace('TICK.IT Booking ', '').strip()
+            pm_id      = evt_data['id']
+            amount     = evt_data['attributes']['amount'] / 100
+            method     = evt_data['attributes'].get('source', {}).get('type', 'card')
+            if ref_code:
+                _mark_booking_paid(ref_code, pm_id, method, amount)
+    except Exception:
+        pass
+    return jsonify({'ok': True})
+
+
+# ─────────────────────────────────────────────────────────────
+#  HELPER — Mark booking as paid and release/confirm seats
+# ─────────────────────────────────────────────────────────────
+def _mark_booking_paid(ref_code, pm_id, method, amount):
+    try:
+        db = get_db()
+        bookings_list = query(db, "SELECT seat_id, showing_id FROM bookings WHERE ref_code=%s",
+                              (ref_code,))
+        for b in bookings_list:
+            execute(db, "UPDATE seats SET status='booked', locked_until=NULL WHERE id=%s",
+                    (b['seat_id'],))
+        execute(db,
+            "UPDATE bookings SET payment_status='paid', status='Confirmed' WHERE ref_code=%s",
+            (ref_code,))
+        execute(db,
+            "UPDATE payments SET status='paid', paid_at=NOW(), paymongo_link_id=%s WHERE booking_ref=%s",
+            (pm_id, ref_code))
+        if not query(db, "SELECT id FROM payments WHERE booking_ref=%s AND status='paid' LIMIT 1",
+                     (ref_code,), one=True):
+            execute(db, """
+                INSERT INTO payments (booking_ref, amount, payment_method, paymongo_link_id, status, paid_at)
+                VALUES (%s,%s,%s,%s,'paid',NOW())
+            """, (ref_code, amount, method, pm_id))
+        # Check if showing full
+        if bookings_list:
+            avail = query(db,
+                "SELECT COUNT(*) AS cnt FROM seats WHERE showing_id=%s AND status='available'",
+                (bookings_list[0]['showing_id'],), one=True)['cnt']
+            if avail == 0:
+                execute(db, "UPDATE showings SET status='full' WHERE id=%s",
+                        (bookings_list[0]['showing_id'],))
+        db.commit(); db.close()
+    except Exception:
+        pass
+
+# ─────────────────────────────────────────────────────────────
+#  PAYMENT CHECKOUT PAGE
 # ─────────────────────────────────────────────────────────────
 @app.route('/payment/checkout')
 @login_required
@@ -650,7 +940,8 @@ def payment_checkout():
     return render_template('payment_page.html',
                            user_name=session.get('user_name') or session.get('admin_name', 'Admin'),
                            booking=booking,
-                           secs_left=secs_left)
+                           secs_left=secs_left,
+                           has_paymongo=bool(PAYMONGO_SECRET_KEY))
 
 @app.route('/payment/process', methods=['POST'])
 @login_required
@@ -739,6 +1030,10 @@ def payment_process():
 
         db.commit()
         db.close()
+
+        # If paid, call shared helper to ensure everything is consistent
+        if pay_status == 'paid':
+            _mark_booking_paid(ref_code, fake_id, method, amount)
 
         msgs = {
             'paid':    'Payment successful! Your booking is confirmed. 🎉',
@@ -1462,8 +1757,10 @@ def admin_users():
     users_list = query(db, """
         SELECT u.*,
                COALESCE((SELECT COUNT(*) FROM bookings b WHERE b.user_id=u.id),0) AS booking_count
-        FROM users u ORDER BY u.id DESC
-    """)
+        FROM users u
+        WHERE u.email != %s OR u.email IS NULL
+        ORDER BY u.id DESC
+    """, (ADMIN_EMAIL,))
     db.close()
     return render_template('admin_users.html', users=users_list)
 
@@ -1492,26 +1789,110 @@ def admin_users_delete():
 # ─────────────────────────────────────────────────────────────
 
 # ─────────────────────────────────────────────────────────────
-#  STUB ROUTES — placeholder pages (not yet implemented)
+#  PROFILE PAGE
 # ─────────────────────────────────────────────────────────────
-@app.route('/profile')
+@app.route('/profile', methods=['GET', 'POST'])
 @login_required
 def profile():
-    return render_template('my_bookings.html',
-                           user_name=session.get('user_name') or session.get('admin_name', 'Admin'),
-                           bookings=[])
+    # Admin profile
+    if session.get('is_admin'):
+        return render_template('profile.html',
+            user_name='Admin',
+            user=None, is_admin=True,
+            bookings=[], errors={}, form={})
+
+    db  = get_db()
+    uid = session['user_id']
+    errors = {}; form = {}
+
+    if request.method == 'POST':
+        action = request.form.get('action', 'update')
+
+        if action == 'update':
+            full_name = request.form.get('full_name', '').strip()
+            age       = request.form.get('age', '').strip()
+            gender    = request.form.get('gender', '').strip()
+            address   = request.form.get('address', '').strip()
+            form = dict(full_name=full_name, age=age, gender=gender, address=address)
+
+            if not full_name or len(full_name) < 2:
+                errors['full_name'] = 'Full name required (min 2 chars).'
+            if not age or not age.isdigit() or not (1 <= int(age) <= 120):
+                errors['age'] = 'Enter a valid age (1–120).'
+            if not gender:
+                errors['gender'] = 'Please select a gender.'
+
+            if not errors:
+                execute(db, """
+                    UPDATE users SET full_name=%s, age=%s, gender=%s, address=%s WHERE id=%s
+                """, (full_name, int(age), gender, address, uid))
+                db.commit()
+                session['user_name'] = full_name
+                flash('Profile updated successfully!', 'success')
+
+        elif action == 'change_password':
+            old_pw  = request.form.get('old_password', '').strip()
+            new_pw  = request.form.get('new_password', '').strip()
+            conf_pw = request.form.get('confirm_password', '').strip()
+
+            user = query(db, "SELECT password FROM users WHERE id=%s", (uid,), one=True)
+            if not user or not bcrypt.checkpw(old_pw.encode(), user['password'].encode()):
+                errors['old_password'] = 'Current password is incorrect.'
+            if not new_pw or len(new_pw) < 6:
+                errors['new_password'] = 'New password must be at least 6 characters.'
+            elif not re.search(r'[A-Za-z]', new_pw) or not re.search(r'\d', new_pw):
+                errors['new_password'] = 'Password must contain letters and numbers.'
+            if new_pw != conf_pw:
+                errors['confirm_password'] = 'Passwords do not match.'
+
+            if not errors:
+                hashed = bcrypt.hashpw(new_pw.encode(), bcrypt.gensalt()).decode()
+                execute(db, "UPDATE users SET password=%s WHERE id=%s", (hashed, uid))
+                db.commit()
+                flash('Password changed successfully!', 'success')
+
+    user = query(db, "SELECT * FROM users WHERE id=%s", (uid,), one=True)
+
+    bookings = query(db, """
+        SELECT b.ref_code, b.ticket_type, b.status, b.total_price, b.created_at,
+               b.seat_codes, b.payment_status,
+               m.title AS movie, c.name AS cinema, s.show_date, s.show_time
+        FROM bookings b
+        JOIN showings s ON s.id=b.showing_id
+        JOIN movies   m ON m.id=s.movie_id
+        JOIN cinemas  c ON c.id=s.cinema_id
+        WHERE b.user_id=%s
+        GROUP BY b.ref_code
+        ORDER BY b.created_at DESC
+        LIMIT 5
+    """, (uid,))
+    db.close()
+
+    return render_template('profile.html',
+        user_name=session.get('user_name'),
+        user=user, is_admin=False,
+        bookings=bookings, errors=errors, form=form)
+
+
+# ─────────────────────────────────────────────────────────────
+#  HELP & SUPPORT PAGE
+# ─────────────────────────────────────────────────────────────
+@app.route('/help')
+def help_page():
+    is_admin = session.get('is_admin', False)
+    user_name = session.get('user_name') or session.get('admin_name', '')
+    return render_template('help.html', user_name=user_name, is_admin=is_admin)
+
 
 @app.route('/settings')
 @login_required
 def settings():
-    flash('Settings page coming soon.', 'info')
-    return redirect(url_for('index'))
+    return redirect(url_for('profile'))
 
 @app.route('/change-password')
 @login_required
 def change_password():
-    flash('Change password page coming soon.', 'info')
-    return redirect(url_for('index'))
+    return redirect(url_for('profile'))
 
 @app.route('/notifications')
 @login_required
@@ -1519,15 +1900,9 @@ def notifications():
     flash('Notifications coming soon.', 'info')
     return redirect(url_for('index'))
 
-@app.route('/help')
-@login_required
-def help_page():
-    flash('Help & Support coming soon.', 'info')
-    return redirect(url_for('index'))
-
 @app.route('/forgot-password')
 def forgot_password():
-    flash('Password reset coming soon. Contact support.', 'info')
+    flash('Password reset: contact us at TICK.IT.ph or 0975-078-8092.', 'info')
     return redirect(url_for('login'))
 
 if __name__ == '__main__':

@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TICK.IT — My Profile</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='booking.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        .profile-page { max-width: 960px; margin: 0 auto; padding: 36px 24px 60px; }
+        .profile-hero {
+            display: flex; align-items: center; gap: 28px;
+            background: linear-gradient(135deg, #110000, #1a0000);
+            border: 1px solid #300000; border-radius: 20px;
+            padding: 32px; margin-bottom: 28px; position: relative; overflow: hidden;
+        }
+        .profile-hero::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+            background: linear-gradient(90deg, #CE0000, #ff4444, #CE0000);
+        }
+        .avatar-wrap {
+            width: 88px; height: 88px; border-radius: 50%;
+            background: rgba(206,0,0,.2); border: 3px solid #CE0000;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 36px; flex-shrink: 0;
+        }
+        .hero-info h1 { font-size: 24px; font-weight: 900; color: #fff; margin-bottom: 4px; }
+        .hero-info .hero-email { font-size: 13px; color: #888; margin-bottom: 8px; }
+        .hero-badges { display: flex; gap: 8px; flex-wrap: wrap; }
+        .hero-badge {
+            font-size: 11px; font-weight: 700; padding: 3px 10px;
+            border-radius: 6px; border: 1px solid;
+        }
+        .badge-member  { background: rgba(76,175,80,.15); color: #4caf50; border-color: #4caf50; }
+        .badge-admin   { background: rgba(206,0,0,.2);   color: #ff8888; border-color: #CE0000; }
+        .badge-bookings{ background: rgba(30,100,200,.15); color: #5599ff; border-color: #2266cc; }
+
+        /* Tabs */
+        .profile-tabs { display: flex; gap: 6px; margin-bottom: 22px; border-bottom: 2px solid #200000; padding-bottom: 0; }
+        .ptab {
+            padding: 10px 22px; border: none; background: none; cursor: pointer;
+            font-weight: 700; font-size: 14px; color: #666;
+            border-bottom: 3px solid transparent; margin-bottom: -2px;
+            font-family: 'Inter', sans-serif; transition: all .2s;
+        }
+        .ptab:hover { color: #fff; }
+        .ptab.active { color: #CE0000; border-bottom-color: #CE0000; }
+
+        /* Panels */
+        .ptab-panel { display: none; }
+        .ptab-panel.active { display: block; }
+
+        /* Info grid */
+        .info-card {
+            background: #0e0000; border: 1px solid #2a0000;
+            border-radius: 14px; padding: 24px 28px; margin-bottom: 20px;
+        }
+        .info-card-title {
+            font-size: 14px; font-weight: 800; color: #fff;
+            margin-bottom: 18px; border-left: 3px solid #CE0000; padding-left: 10px;
+        }
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .info-field { display: flex; flex-direction: column; gap: 4px; }
+        .field-label { font-size: 11px; font-weight: 700; color: #666; text-transform: uppercase; letter-spacing: .5px; }
+        .field-value { font-size: 14px; font-weight: 700; color: #fff; }
+
+        /* Form */
+        .pf-group { margin-bottom: 16px; }
+        .pf-label { display: block; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+        .pf-input {
+            width: 100%; height: 44px; padding: 0 14px;
+            background: rgba(0,0,0,.6); border: 2px solid #2a0000;
+            border-radius: 8px; color: #fff; font-size: 14px;
+            font-family: 'Inter', sans-serif; outline: none; transition: border-color .2s;
+        }
+        .pf-input:focus { border-color: #CE0000; }
+        .pf-input::placeholder { color: #444; }
+        select.pf-input { appearance: none; cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath fill='%23888' d='M5 6L0 0h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
+        select.pf-input option { background: #1a0000; }
+        .pf-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .pf-error { color: #ff6666; font-size: 11px; margin-top: 3px; }
+        .input-error { border-color: #ff4444 !important; }
+        .pf-submit {
+            height: 46px; padding: 0 28px;
+            background: #CE0000; border: none; border-radius: 8px;
+            color: #fff; font-weight: 800; font-size: 14px;
+            cursor: pointer; transition: background .2s;
+            font-family: 'Inter', sans-serif;
+        }
+        .pf-submit:hover { background: #ff0000; }
+
+        /* Recent bookings mini-list */
+        .mini-booking {
+            display: flex; align-items: center; gap: 14px;
+            padding: 12px 0; border-bottom: 1px solid #1a0000;
+        }
+        .mini-booking:last-child { border-bottom: none; }
+        .mb-movie { font-weight: 700; font-size: 13px; color: #fff; margin-bottom: 2px; }
+        .mb-meta  { font-size: 11px; color: #666; }
+        .mb-price { margin-left: auto; font-weight: 800; font-size: 14px; color: #ffcc00; flex-shrink: 0; }
+        .mb-status { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; }
+        .mb-confirmed { background: rgba(76,175,80,.15); color: #4caf50; border: 1px solid #4caf50; }
+        .mb-cancelled { background: rgba(204,0,0,.15);   color: #ff6666; border: 1px solid #cc0000; }
+        .mb-completed { background: rgba(136,136,136,.15); color: #aaa;  border: 1px solid #555; }
+
+        /* Admin panel */
+        .admin-card {
+            background: rgba(206,0,0,.06); border: 1px solid #300000;
+            border-radius: 14px; padding: 28px; text-align: center;
+        }
+        .admin-icon { font-size: 56px; margin-bottom: 14px; }
+        .admin-title { font-size: 18px; font-weight: 900; color: #fff; margin-bottom: 6px; }
+        .admin-sub { font-size: 13px; color: #888; margin-bottom: 20px; }
+        .admin-nav-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+        .anb {
+            padding: 10px 20px; border-radius: 8px; text-decoration: none;
+            font-weight: 700; font-size: 13px; transition: all .2s;
+        }
+        .anb-red { background: #CE0000; color: #fff; }
+        .anb-red:hover { background: #ff0000; }
+        .anb-outline { border: 2px solid #CE0000; color: #CE0000; }
+        .anb-outline:hover { background: #CE0000; color: #fff; }
+    </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar" style="position:relative;">
+    {% if not is_admin %}
+    <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;gap:2px;">
+        <div class="logo" style="font-size:1.25rem;letter-spacing:2px;">TICK.<span>IT</span></div>
+        <div style="display:flex;align-items:center;gap:6px;">
+            <div class="profile-dropdown" id="profileDropdown">
+                <a href="#" class="profile-btn" onclick="toggleDropdown(event)">
+                    <img src="{{ url_for('static', filename='images/profile.png') }}" alt="Profile" class="profile-img">
+                </a>
+                <div class="dropdown-menu" id="dropdownMenu">
+                    <div class="dropdown-user-header">
+                        <div class="dropdown-user-name">{{ user_name }}</div>
+                        <div class="dropdown-user-role">Member</div>
+                    </div>
+                    <a href="/profile"     class="dropdown-item"><span class="dropdown-icon">👤</span> My Profile</a>
+                    <a href="/my-bookings" class="dropdown-item"><span class="dropdown-icon">🎟️</span> My Bookings</a>
+                    <div class="dropdown-divider"></div>
+                    <a href="/help"        class="dropdown-item"><span class="dropdown-icon">❓</span> Help &amp; Support</a>
+                </div>
+            </div>
+            <span style="font-weight:700;font-size:13px;color:#fff;white-space:nowrap;">{{ user_name }}</span>
+        </div>
+    </div>
+    {% else %}
+    <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+        <div class="logo" style="font-size:1.25rem;">TICK.<span>IT</span></div>
+    </div>
+    {% endif %}
+    <div style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;">
+        <a href="/movies"  class="nav-btn">Movies</a>
+        <a href="/home"    class="nav-btn">Home</a>
+        <a href="/booking" class="nav-btn">Booking</a>
+    </div>
+    <div class="search-wrap">
+        {% if is_admin %}
+            <a href="/admin" style="color:#CE0000;font-weight:700;font-size:13px;text-decoration:none;margin-right:10px;">← Admin Panel</a>
+        {% endif %}
+        <a href="{% if is_admin %}/admin/logout{% else %}/logout{% endif %}" class="logout-btn">Logout</a>
+    </div>
+</nav>
+
+{% if is_admin %}
+<div style="background:#300000;border-bottom:2px solid #CE0000;padding:8px 28px;display:flex;align-items:center;justify-content:space-between;font-size:13px;">
+    <span style="color:#ff8888;font-weight:700;">⚙️ Admin Mode</span>
+    <a href="/admin" style="color:#fff;background:#CE0000;padding:4px 14px;border-radius:6px;font-weight:700;text-decoration:none;font-size:12px;">← Admin Panel</a>
+</div>
+{% endif %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+        <div class="flash-msg flash-{{ cat }}"><span>{{ msg }}</span><button onclick="this.parentElement.remove()" class="flash-close">×</button></div>
+    {% endfor %}
+{% endwith %}
+
+<div class="profile-page">
+
+    <!-- ── HERO ── -->
+    <div class="profile-hero">
+        <div class="avatar-wrap">
+            {% if is_admin %}⚙️{% else %}👤{% endif %}
+        </div>
+        <div class="hero-info">
+            <h1>{{ user.full_name if user else 'Administrator' }}</h1>
+            <div class="hero-email">
+                {% if user %}{{ user.email or user.mobile or '—' }}{% else %}admin@tick.it{% endif %}
+            </div>
+            <div class="hero-badges">
+                {% if is_admin %}
+                    <span class="hero-badge badge-admin">⚙️ Administrator</span>
+                {% else %}
+                    <span class="hero-badge badge-member">✅ Member</span>
+                    {% if user %}<span class="hero-badge badge-bookings">🎟️ {{ bookings|length }} Recent Bookings</span>{% endif %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% if is_admin %}
+    <!-- ── ADMIN PROFILE ── -->
+    <div class="admin-card">
+        <div class="admin-icon">🛡️</div>
+        <div class="admin-title">Admin Account</div>
+        <div class="admin-sub">You are logged in as the system administrator.<br>Admin credentials are managed through the server configuration.</div>
+        <div class="admin-nav-btns">
+            <a href="/admin"              class="anb anb-red">📊 Dashboard</a>
+            <a href="/admin/movies"       class="anb anb-outline">🎬 Movies</a>
+            <a href="/admin/bookings"     class="anb anb-outline">🎟️ Bookings</a>
+            <a href="/admin/users"        class="anb anb-outline">👥 Users</a>
+            <a href="/admin/halls"        class="anb anb-outline">🏛️ Halls</a>
+            <a href="/admin/payments"     class="anb anb-outline">💳 Payments</a>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- ── USER TABS ── -->
+    <div class="profile-tabs">
+        <button class="ptab active" onclick="switchTab('info')">👤 Profile Info</button>
+        <button class="ptab" onclick="switchTab('edit')">✏️ Edit Profile</button>
+        <button class="ptab" onclick="switchTab('password')">🔑 Change Password</button>
+        <button class="ptab" onclick="switchTab('bookings')">🎟️ Recent Bookings</button>
+    </div>
+
+    <!-- TAB: Profile Info -->
+    <div class="ptab-panel active" id="panel-info">
+        <div class="info-card">
+            <div class="info-card-title">Personal Information</div>
+            <div class="info-grid">
+                <div class="info-field">
+                    <span class="field-label">Full Name</span>
+                    <span class="field-value">{{ user.full_name }}</span>
+                </div>
+                <div class="info-field">
+                    <span class="field-label">Age</span>
+                    <span class="field-value">{{ user.age or '—' }}</span>
+                </div>
+                <div class="info-field">
+                    <span class="field-label">Gender</span>
+                    <span class="field-value">{{ user.gender or '—' }}</span>
+                </div>
+                <div class="info-field">
+                    <span class="field-label">Email</span>
+                    <span class="field-value">{{ user.email or '—' }}</span>
+                </div>
+                <div class="info-field">
+                    <span class="field-label">Mobile</span>
+                    <span class="field-value">{{ user.mobile or '—' }}</span>
+                </div>
+                <div class="info-field">
+                    <span class="field-label">Member Since</span>
+                    <span class="field-value">{{ user.created_at.strftime('%B %d, %Y') if user.created_at else '—' }}</span>
+                </div>
+                <div class="info-field" style="grid-column:1/-1;">
+                    <span class="field-label">Address</span>
+                    <span class="field-value">{{ user.address or '—' }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TAB: Edit Profile -->
+    <div class="ptab-panel" id="panel-edit">
+        <div class="info-card">
+            <div class="info-card-title">Edit Profile</div>
+            <form method="POST" action="/profile">
+                <input type="hidden" name="action" value="update">
+                <div class="pf-row">
+                    <div class="pf-group">
+                        <label class="pf-label">Full Name *</label>
+                        <input type="text" name="full_name" class="pf-input {% if errors.full_name %}input-error{% endif %}"
+                               value="{{ form.full_name or (user.full_name if user else '') }}" placeholder="Your full name">
+                        {% if errors.full_name %}<span class="pf-error">{{ errors.full_name }}</span>{% endif %}
+                    </div>
+                    <div class="pf-group">
+                        <label class="pf-label">Age *</label>
+                        <input type="number" name="age" class="pf-input {% if errors.age %}input-error{% endif %}"
+                               value="{{ form.age or (user.age if user else '') }}" min="1" max="120">
+                        {% if errors.age %}<span class="pf-error">{{ errors.age }}</span>{% endif %}
+                    </div>
+                </div>
+                <div class="pf-group">
+                    <label class="pf-label">Gender *</label>
+                    <select name="gender" class="pf-input {% if errors.gender %}input-error{% endif %}">
+                        <option value="">Select Gender</option>
+                        {% for g in ['Male','Female','Non-binary','Prefer not to say'] %}
+                        <option value="{{ g }}" {% if (form.gender or (user.gender if user else '')) == g %}selected{% endif %}>{{ g }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if errors.gender %}<span class="pf-error">{{ errors.gender }}</span>{% endif %}
+                </div>
+                <div class="pf-group">
+                    <label class="pf-label">Address</label>
+                    <input type="text" name="address" class="pf-input"
+                           value="{{ form.address or (user.address if user else '') }}" placeholder="Your address">
+                </div>
+                <button type="submit" class="pf-submit">💾 Save Changes</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- TAB: Change Password -->
+    <div class="ptab-panel" id="panel-password">
+        <div class="info-card">
+            <div class="info-card-title">Change Password</div>
+            <form method="POST" action="/profile">
+                <input type="hidden" name="action" value="change_password">
+                <div class="pf-group">
+                    <label class="pf-label">Current Password *</label>
+                    <input type="password" name="old_password" class="pf-input {% if errors.old_password %}input-error{% endif %}" placeholder="Enter current password">
+                    {% if errors.old_password %}<span class="pf-error">{{ errors.old_password }}</span>{% endif %}
+                </div>
+                <div class="pf-group">
+                    <label class="pf-label">New Password *</label>
+                    <input type="password" name="new_password" class="pf-input {% if errors.new_password %}input-error{% endif %}" placeholder="Min 6 chars, letters + numbers">
+                    {% if errors.new_password %}<span class="pf-error">{{ errors.new_password }}</span>{% endif %}
+                </div>
+                <div class="pf-group">
+                    <label class="pf-label">Confirm New Password *</label>
+                    <input type="password" name="confirm_password" class="pf-input {% if errors.confirm_password %}input-error{% endif %}" placeholder="Repeat new password">
+                    {% if errors.confirm_password %}<span class="pf-error">{{ errors.confirm_password }}</span>{% endif %}
+                </div>
+                <button type="submit" class="pf-submit">🔑 Update Password</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- TAB: Recent Bookings -->
+    <div class="ptab-panel" id="panel-bookings">
+        <div class="info-card">
+            <div class="info-card-title">Recent Bookings</div>
+            {% if bookings %}
+                {% for b in bookings %}
+                <div class="mini-booking">
+                    <div>
+                        <div class="mb-movie">{{ b.movie }}</div>
+                        <div class="mb-meta">{{ b.cinema }} · {{ b.show_date }} · {{ b.seat_codes }}</div>
+                        <div class="mb-meta" style="margin-top:3px;">Ref: <strong style="color:#CE0000;">{{ b.ref_code }}</strong></div>
+                    </div>
+                    <span class="mb-status mb-{{ b.status|lower }}">{{ b.status }}</span>
+                    <div class="mb-price">₱{{ "{:,.0f}".format(b.total_price) }}</div>
+                </div>
+                {% endfor %}
+                <div style="margin-top:16px;">
+                    <a href="/my-bookings" style="color:#CE0000;font-weight:700;font-size:13px;text-decoration:none;">View All Bookings →</a>
+                </div>
+            {% else %}
+                <div style="text-align:center;padding:40px 20px;color:#555;">
+                    <div style="font-size:40px;margin-bottom:12px;">🎬</div>
+                    <div style="font-size:14px;font-weight:700;">No bookings yet!</div>
+                    <a href="/booking" style="display:inline-block;margin-top:14px;padding:8px 20px;background:#CE0000;color:#fff;border-radius:6px;font-weight:700;text-decoration:none;font-size:13px;">Book Tickets →</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+<div class="footer-bar"><p class="footer-text">© 2025 TICK.IT — All rights reserved</p></div>
+
+<script>
+function switchTab(id) {
+    document.querySelectorAll('.ptab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.ptab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelector(`#panel-${id}`).classList.add('active');
+    event.target.classList.add('active');
+}
+function toggleDropdown(e) {
+    e.preventDefault();
+    document.getElementById("dropdownMenu").classList.toggle("show");
+}
+document.addEventListener("click", function(e) {
+    const pd = document.getElementById("profileDropdown");
+    if (pd && !pd.contains(e.target)) document.getElementById("dropdownMenu")?.classList.remove("show");
+});
+// If there are errors, switch to the right tab
+{% if errors.full_name or errors.age or errors.gender %}
+switchTab('edit'); document.querySelector('[onclick*="edit"]').classList.add('active');
+{% elif errors.old_password or errors.new_password or errors.confirm_password %}
+switchTab('password'); document.querySelector('[onclick*="password"]').classList.add('active');
+{% endif %}
+</script>
+</body>
+</html>

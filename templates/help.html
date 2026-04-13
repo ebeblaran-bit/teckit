@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TICK.IT — Help &amp; Support</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='booking.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        .help-page { max-width: 900px; margin: 0 auto; padding: 36px 24px 60px; }
+        .help-hero {
+            background: linear-gradient(135deg, #110000, #1a0000);
+            border: 1px solid #300000; border-radius: 20px;
+            padding: 36px; margin-bottom: 32px;
+            text-align: center; position: relative; overflow: hidden;
+        }
+        .help-hero::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+            background: linear-gradient(90deg, #CE0000, #ff4444, #CE0000);
+        }
+        .help-hero-icon { font-size: 52px; margin-bottom: 12px; }
+        .help-hero h1  { font-size: 28px; font-weight: 900; color: #fff; margin-bottom: 8px; }
+        .help-hero p   { font-size: 14px; color: #888; line-height: 1.6; }
+
+        /* Search */
+        .help-search-wrap { position: relative; max-width: 480px; margin: 20px auto 0; }
+        .help-search {
+            width: 100%; height: 46px; padding: 0 48px 0 18px;
+            background: rgba(0,0,0,.6); border: 2px solid #300000;
+            border-radius: 10px; color: #fff; font-size: 14px;
+            font-family: 'Inter', sans-serif; outline: none; transition: border-color .2s;
+        }
+        .help-search:focus { border-color: #CE0000; }
+        .help-search::placeholder { color: #555; }
+        .search-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); font-size: 18px; color: #555; }
+
+        /* Quick links */
+        .quick-links { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 32px; }
+        .ql-card {
+            background: #0e0000; border: 1px solid #2a0000;
+            border-radius: 12px; padding: 20px 16px; text-align: center;
+            text-decoration: none; color: #fff; transition: border-color .2s, transform .15s;
+        }
+        .ql-card:hover { border-color: #CE0000; transform: translateY(-3px); }
+        .ql-icon  { font-size: 30px; margin-bottom: 8px; }
+        .ql-title { font-weight: 700; font-size: 13px; color: #fff; }
+
+        /* FAQ sections */
+        .faq-section { margin-bottom: 28px; }
+        .faq-section-title {
+            font-size: 16px; font-weight: 800; color: #fff;
+            border-left: 4px solid #CE0000; padding-left: 12px;
+            margin-bottom: 14px;
+        }
+        .faq-item {
+            background: #0e0000; border: 1px solid #1a0000;
+            border-radius: 10px; overflow: hidden; margin-bottom: 8px;
+        }
+        .faq-q {
+            width: 100%; display: flex; align-items: center; justify-content: space-between;
+            padding: 16px 18px; background: none; border: none; cursor: pointer;
+            font-weight: 700; font-size: 14px; color: #fff;
+            font-family: 'Inter', sans-serif; text-align: left; gap: 12px;
+        }
+        .faq-q:hover { background: rgba(206,0,0,.06); }
+        .faq-chevron { font-size: 12px; color: #CE0000; flex-shrink: 0; transition: transform .25s; }
+        .faq-a {
+            padding: 0 18px; max-height: 0; overflow: hidden;
+            transition: max-height .3s ease, padding .3s;
+            font-size: 13px; color: #aaa; line-height: 1.7;
+        }
+        .faq-item.open .faq-a { max-height: 500px; padding: 0 18px 16px; }
+        .faq-item.open .faq-chevron { transform: rotate(180deg); }
+
+        /* Contact section */
+        .contact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+        .contact-card {
+            background: #0e0000; border: 1px solid #2a0000;
+            border-radius: 12px; padding: 22px 20px;
+        }
+        .cc-icon  { font-size: 28px; margin-bottom: 10px; }
+        .cc-title { font-weight: 800; font-size: 14px; color: #fff; margin-bottom: 6px; }
+        .cc-value { font-size: 13px; color: #aaa; line-height: 1.6; }
+        .cc-value a { color: #CE0000; text-decoration: none; }
+        .cc-value a:hover { text-decoration: underline; }
+
+        /* How to book steps */
+        .steps-list { display: flex; flex-direction: column; gap: 12px; }
+        .step-row {
+            display: flex; gap: 16px; align-items: flex-start;
+            background: #0e0000; border: 1px solid #1a0000;
+            border-radius: 10px; padding: 16px;
+        }
+        .step-num {
+            width: 32px; height: 32px; border-radius: 50%;
+            background: #CE0000; color: #fff;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 13px; font-weight: 900; flex-shrink: 0;
+        }
+        .step-body h4 { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+        .step-body p  { font-size: 12px; color: #888; line-height: 1.5; }
+
+        .no-result { display: none; text-align: center; padding: 40px; color: #555; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar" style="position:relative;">
+    <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;gap:2px;">
+        <div class="logo" style="font-size:1.25rem;letter-spacing:2px;">TICK.<span>IT</span></div>
+        {% if not is_admin %}
+        <div style="display:flex;align-items:center;gap:6px;">
+            <div class="profile-dropdown" id="profileDropdown">
+                <a href="#" class="profile-btn" onclick="toggleDropdown(event)">
+                    <img src="{{ url_for('static', filename='images/profile.png') }}" alt="Profile" class="profile-img">
+                </a>
+                <div class="dropdown-menu" id="dropdownMenu">
+                    <div class="dropdown-user-header">
+                        <div class="dropdown-user-name">{{ user_name }}</div>
+                        <div class="dropdown-user-role">Member</div>
+                    </div>
+                    <a href="/profile"     class="dropdown-item"><span class="dropdown-icon">👤</span> My Profile</a>
+                    <a href="/my-bookings" class="dropdown-item"><span class="dropdown-icon">🎟️</span> My Bookings</a>
+                    <div class="dropdown-divider"></div>
+                    <a href="/help"        class="dropdown-item"><span class="dropdown-icon">❓</span> Help &amp; Support</a>
+                </div>
+            </div>
+            <span style="font-weight:700;font-size:13px;color:#fff;white-space:nowrap;">{{ user_name }}</span>
+        </div>
+        {% endif %}
+    </div>
+    <div style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;">
+        <a href="/movies"  class="nav-btn">Movies</a>
+        <a href="/home"    class="nav-btn">Home</a>
+        <a href="/booking" class="nav-btn">Booking</a>
+    </div>
+    <div class="search-wrap">
+        {% if is_admin %}
+            <a href="/admin" style="color:#CE0000;font-weight:700;font-size:13px;text-decoration:none;margin-right:10px;">← Admin</a>
+        {% endif %}
+        <a href="{% if is_admin %}/admin/logout{% else %}/logout{% endif %}" class="logout-btn">Logout</a>
+    </div>
+</nav>
+
+{% if is_admin %}
+<div style="background:#300000;border-bottom:2px solid #CE0000;padding:8px 28px;display:flex;align-items:center;justify-content:space-between;font-size:13px;">
+    <span style="color:#ff8888;font-weight:700;">⚙️ Admin Mode — Viewing Help Page</span>
+    <a href="/admin" style="color:#fff;background:#CE0000;padding:4px 14px;border-radius:6px;font-weight:700;text-decoration:none;font-size:12px;">← Back to Admin Panel</a>
+</div>
+{% endif %}
+
+<div class="help-page">
+
+    <!-- HERO -->
+    <div class="help-hero">
+        <div class="help-hero-icon">❓</div>
+        <h1>Help &amp; Support</h1>
+        <p>Find answers to common questions, or reach out to our team directly.</p>
+        <div class="help-search-wrap">
+            <input type="text" class="help-search" id="faqSearch" placeholder="Search for help..." oninput="searchFAQ()">
+            <span class="search-icon">🔍</span>
+        </div>
+    </div>
+
+    <!-- QUICK LINKS -->
+    <div class="quick-links">
+        <a href="#how-to-book" class="ql-card" onclick="scrollTo('how-to-book')">
+            <div class="ql-icon">🎟️</div>
+            <div class="ql-title">How to Book</div>
+        </a>
+        <a href="#payment-help" class="ql-card" onclick="scrollTo('payment-help')">
+            <div class="ql-icon">💳</div>
+            <div class="ql-title">Payment Methods</div>
+        </a>
+        <a href="#contact" class="ql-card" onclick="scrollTo('contact')">
+            <div class="ql-icon">📞</div>
+            <div class="ql-title">Contact Us</div>
+        </a>
+    </div>
+
+    <!-- HOW TO BOOK -->
+    <div class="faq-section" id="how-to-book">
+        <div class="faq-section-title">🎟️ How to Book Tickets</div>
+        <div class="steps-list">
+            <div class="step-row">
+                <div class="step-num">1</div>
+                <div class="step-body"><h4>Browse Movies</h4><p>Go to the Movies page to see what's currently showing and coming soon at cinemas near you.</p></div>
+            </div>
+            <div class="step-row">
+                <div class="step-num">2</div>
+                <div class="step-body"><h4>Choose a Schedule</h4><p>Select your preferred cinema, date, and showtime. Available seats are shown in real time.</p></div>
+            </div>
+            <div class="step-row">
+                <div class="step-num">3</div>
+                <div class="step-body"><h4>Pick Your Seats</h4><p>Click available seats on the interactive seat map. Green = available, Yellow = VIP, Red = taken. Max 10 seats per booking.</p></div>
+            </div>
+            <div class="step-row">
+                <div class="step-num">4</div>
+                <div class="step-body"><h4>Enter Details &amp; Pay</h4><p>Enter your name, contact number, and choose your ticket type (Regular / Student / Senior/PWD). Proceed to payment via GCash, Maya, or card.</p></div>
+            </div>
+            <div class="step-row">
+                <div class="step-num">5</div>
+                <div class="step-body"><h4>Receive Your Booking</h4><p>After payment, you'll get a booking reference code. Show this at the cinema counter to claim your tickets. Arrive 15 minutes early!</p></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FAQ: BOOKINGS -->
+    <div class="faq-section" id="bookings-faq">
+        <div class="faq-section-title">🎬 Booking Questions</div>
+        <div class="faq-item" data-tags="cancel booking refund seat">
+            <button class="faq-q" onclick="toggleFAQ(this)">Can I cancel or change my booking? <span class="faq-chevron">▼</span></button>
+            <div class="faq-a">Once a booking is confirmed and paid, cancellations must be requested at the cinema counter. Online cancellation is currently not supported. Seats are non-transferable.</div>
+        </div>
+        <div class="faq-item" data-tags="how many seats maximum booking">
+            <button class="faq-q" onclick="toggleFAQ(this)">How many seats can I book at once? <span class="faq-chevron">▼</span></button>
+            <div class="faq-a">You can book up to 10 seats per transaction. If you need more, please make a second booking.</div>
+        </div>
+        <div class="faq-item" data-tags="seat lock reserved hold time">
+            <button class="faq-q" onclick="toggleFAQ(this)">How long are seats held for me? <span class="faq-chevron">▼</span></button>
+            <div class="faq-a">Seats are locked for 15 minutes from the time you select them. If payment is not completed within that time, the seats are released back to the public.</div>
+        </div>
+        <div class="faq-item" data-tags="discount student senior pwd ticket type">
+            <button class="faq-q" onclick="toggleFAQ(this)">How do student/senior/PWD discounts work? <span class="faq-chevron">▼</span></button>
+            <div class="faq-a">Select "Student", or "Senior/PWD" as your ticket type during booking. Your booking will be marked as "Pending Verification". Please bring your valid ID (Student ID, PWD card, or Senior Citizen card) to the cinema for verification. If the ID is not presented, the regular price applies.</div>
+        </div>
+        <div class="faq-item" data-tags="my bookings history">
+            <button class="faq-q" onclick="toggleFAQ(this)">Where can I see my booking history? <span class="faq-chevron">▼</span></button>
+            <div class="faq-a">Click your profile picture in the top-left corner and select "My Bookings", or go to <a href="/my-bookings" style="color:#CE0000;">My Bookings</a> directly. All your past and upcoming bookings are listed there.</div>
+        </div>
+    </div>
+
+    <!-- FAQ: PAYMENT -->
+    <div class="faq-section" id="payment-help">
+        <div class="faq-section-title">💳 Payment Questions</div>
+        <div class="faq-item" data-tags="gcash qr code payment method">
+            <button class="faq-q" onclick="toggleFAQ(this)">How do I pay with GCash? <span class="faq-chevron">▼</span></button>
+            <div class="faq-a">On the payment page, select GCash. A QR code will appear — open your GCash app, tap "Pay QR", and scan the code. The amount will be deducted from your GCash wallet automatically. Your booking is confirmed once payment is verified.</div>
+        </div>
+        <div class="faq-item" data-tags="maya paymaya ewallet payment">
+            <button class="faq-q" onclick="toggleFAQ(this)">Can I pay with Maya? <span class="faq-chevron">▼</span></button>
+            <div class="faq-a">Yes! Select Maya on the payment page. You'll be redirected to the Maya app or website to complete the payment. Return to TICK.IT after payment to see your confirmation.</div>
+        </div>
+        <div class="faq-item" data-tags="credit debit card visa mastercard">
+            <button class="faq-q" onclick="toggleFAQ(this)">Which cards are accepted? <span class="faq-chevron">▼</span></button>
+            <div class="faq-a">We accept Visa and Mastercard credit and debit cards. Card details are processed securely through PayMongo — TICK.IT never stores your card information.</div>
+        </div>
+        <div class="faq-item" data-tags="payment failed declined try again">
+            <button class="faq-q" onclick="toggleFAQ(this)">My payment was declined. What should I do? <span class="faq-chevron">▼</span></button>
+            <div class="faq-a">If payment fails, your seats will be automatically released. You can try booking again with a different payment method. Make sure your GCash/Maya wallet has sufficient balance, or check with your card issuer if using a card.</div>
+        </div>
+        <div class="faq-item" data-tags="refund payment proof receipt">
+            <button class="faq-q" onclick="toggleFAQ(this)">I was charged but my booking wasn't confirmed. What do I do? <span class="faq-chevron">▼</span></button>
+            <div class="faq-a">This is rare but can happen due to network issues. Please contact us immediately with your payment proof (GCash/Maya receipt or card statement) and we will resolve it within 24 hours.</div>
+        </div>
+    </div>
+
+    <!-- FAQ: CINEMAS -->
+    <div class="faq-section">
+        <div class="faq-section-title">📍 Cinema Locations</div>
+        <div class="faq-item" data-tags="cinema location where venue">
+            <button class="faq-q" onclick="toggleFAQ(this)">Where are your cinema locations? <span class="faq-chevron">▼</span></button>
+            <div class="faq-a">We currently operate at: SM Seaside Cebu (SRP), Gaisano Grand Minglanilla, Nustar Cebu Cinema (SRP), Cebu IL CORSO Cinema (South Road Properties), UC Cantao-an (Naga, Cebu), and TOPS Cebu Skydom (Busay).</div>
+        </div>
+        <div class="faq-item" data-tags="vip seat regular difference">
+            <button class="faq-q" onclick="toggleFAQ(this)">What's the difference between VIP and Regular seats? <span class="faq-chevron">▼</span></button>
+            <div class="faq-a">VIP seats (shown in gold/yellow on the seat map) are premium seats in the prime viewing area, typically rows A–B at the front of the premium section. They are priced the same as Regular seats (₱450). The Admin can customize seat layouts per hall.</div>
+        </div>
+        <div class="faq-item" data-tags="arrive late door open">
+            <button class="faq-q" onclick="toggleFAQ(this)">When should I arrive at the cinema? <span class="faq-chevron">▼</span></button>
+            <div class="faq-a">We recommend arriving at least 15 minutes before the showtime. Bring your booking reference code (or screenshot) to show at the counter.</div>
+        </div>
+    </div>
+
+    <!-- CONTACT -->
+    <div class="faq-section" id="contact">
+        <div class="faq-section-title">📞 Contact &amp; Support</div>
+        <div class="contact-grid">
+            <div class="contact-card">
+                <div class="cc-icon">📱</div>
+                <div class="cc-title">Mobile / WhatsApp / Viber</div>
+                <div class="cc-value">0975 - 078 - 8092<br>Available Mon–Sun, 8AM–10PM</div>
+            </div>
+            <div class="contact-card">
+                <div class="cc-icon">📧</div>
+                <div class="cc-title">Email</div>
+                <div class="cc-value"><a href="mailto:support@tickit.ph">support@tickit.ph</a><br>We reply within 24 hours.</div>
+            </div>
+            <div class="contact-card">
+                <div class="cc-icon">📘</div>
+                <div class="cc-title">Facebook</div>
+                <div class="cc-value"><a href="#">TICK.IT.ph</a><br>Send us a message on FB for quick replies.</div>
+            </div>
+            <div class="contact-card">
+                <div class="cc-icon">📷</div>
+                <div class="cc-title">Instagram / TikTok</div>
+                <div class="cc-value">@TICK.IT.ph<br>Follow us for promos and updates.</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="no-result" class="no-result">
+        <div style="font-size:40px;margin-bottom:12px;">🔍</div>
+        No help articles found for "<span id="search-term"></span>". Try a different keyword or <a href="#contact" style="color:#CE0000;">contact us</a>.
+    </div>
+
+</div>
+
+<div class="footer-bar"><p class="footer-text">© 2025 TICK.IT — All rights reserved</p></div>
+
+<script>
+function toggleFAQ(btn) {
+    const item = btn.closest('.faq-item');
+    const isOpen = item.classList.contains('open');
+    document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
+    if (!isOpen) item.classList.add('open');
+}
+
+function searchFAQ() {
+    const q = document.getElementById('faqSearch').value.toLowerCase().trim();
+    const items = document.querySelectorAll('.faq-item');
+    let found = 0;
+    items.forEach(item => {
+        const text = (item.textContent + item.dataset.tags).toLowerCase();
+        const show = !q || text.includes(q);
+        item.style.display = show ? '' : 'none';
+        if (show) found++;
+    });
+    document.querySelectorAll('.faq-section-title, .steps-list, .step-row').forEach(el => {
+        el.style.display = q ? 'none' : '';
+    });
+    document.getElementById('no-result').style.display = found === 0 && q ? 'block' : 'none';
+    document.getElementById('search-term').textContent = q;
+}
+
+function scrollTo(id) {
+    event.preventDefault();
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function toggleDropdown(e) {
+    e.preventDefault();
+    document.getElementById("dropdownMenu")?.classList.toggle("show");
+}
+document.addEventListener("click", function(e) {
+    const pd = document.getElementById("profileDropdown");
+    if (pd && !pd.contains(e.target)) document.getElementById("dropdownMenu")?.classList.remove("show");
+});
+</script>
+</body>
+</html>
