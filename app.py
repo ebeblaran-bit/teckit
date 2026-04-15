@@ -13,7 +13,7 @@ except ImportError:
 #  APP CONFIG
 # ─────────────────────────────────────────────────────────────
 app = Flask(__name__)
-app.secret_key = 'tickit_very_secret_key_2025_change_in_prod'
+app.secret_key = os.getenv("FLASK_SECRET_KEY")
 
 # ─────────────────────────────────────────────────────────────
 #  DATABASE CONFIG
@@ -55,9 +55,11 @@ PAY_FAILED_RATE  = 0.15
 # ─── PayMongo TEST MODE ───────────────────────────────────────────────────────
 # Replace these with your PayMongo TEST keys from https://dashboard.paymongo.com
 # Use TEST keys only — never commit live keys to source control.
-PAYMONGO_PUBLIC_KEY = 'pk_test_1nfGmEUQPQKzvcQ2jeBzGBKC'
+PAYMONGO_SECRET_KEY = os.getenv("PAYMONGO_SECRET_KEY")
+PAYMONGO_PUBLIC_KEY = os.getenv("PAYMONGO_PUBLIC_KEY")
 PAYMONGO_BASE_URL   = 'https://api.paymongo.com/v1'
-                       and REQUESTS_AVAILABLE)
+
+USE_PAYMONGO = bool(PAYMONGO_SECRET_KEY) and REQUESTS_AVAILABLE
 
 def _paymongo_auth():
     return base64.b64encode(f'{PAYMONGO_SECRET_KEY}:'.encode()).decode()
