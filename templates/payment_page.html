@@ -138,6 +138,14 @@
         </div>
         <div class="pay-body">
 
+            {% if booking.discount_status == 'pending_verification' %}
+            <div class="notice" style="background:rgba(255,140,0,.1);border:1px solid #cc6600;color:#ffaa44;margin-bottom:14px;">
+                ⚠️ <strong>Discount Pending Verification</strong><br>
+                You selected a <strong>{{ booking.ticket_type }}</strong> ticket. Your booking is currently charged at the <strong>Regular price (₱450)</strong> until your ID is verified by staff at the cinema.
+                <br><small>Present a valid Student ID / PWD ID / Senior Citizen card to cinema staff upon arrival.</small>
+            </div>
+            {% endif %}
+
             {% if use_paymongo %}
             <div class="demo-note" style="background:rgba(76,175,80,.08);border:1px solid #2a5c2a;color:#7fff7f;">
                 🔒 <strong>Secure Payment via PayMongo (Test Mode)</strong><br>
@@ -145,14 +153,17 @@
             </div>
             {% else %}
             <div class="demo-note">
-                🖥️ <strong>Simulation Mode</strong> — PayMongo keys not configured. Payments are simulated.
-                <br><small>Set <code>PAYMONGO_SECRET_KEY</code> env var to enable real test payments.</small>
+                🖥️ <strong>Simulation Mode</strong> — PayMongo keys not configured. Payments are simulated for testing.
+                <br><small>Set <code>PAYMONGO_SECRET_KEY</code> in <code>app.py</code> to enable real PayMongo test payments.</small>
             </div>
             {% endif %}
 
             <!-- Method Tabs -->
-            <div class="mtabs">
-                <button class="mtab active" id="tab-gcash"       onclick="sw('gcash')">
+            <div class="mtabs" style="grid-template-columns:repeat(5,1fr);">
+                <button class="mtab active" id="tab-walk_in"     onclick="sw('walk_in')">
+                    <span class="mi">🏛️</span><span class="ml">Walk-In</span><span class="mb">Pay Counter</span>
+                </button>
+                <button class="mtab"        id="tab-gcash"       onclick="sw('gcash')">
                     <span class="mi">📱</span><span class="ml">GCash</span><span class="mb">Mobile</span>
                 </button>
                 <button class="mtab"        id="tab-maya"        onclick="sw('maya')">
@@ -166,8 +177,37 @@
                 </button>
             </div>
 
+            <!-- Walk-In / Pay at Counter -->
+            <div id="form-walk_in">
+                <div style="text-align:center;padding:16px 0 10px;">
+                    <div style="font-size:48px;margin-bottom:10px;">🏛️</div>
+                    <div style="font-size:16px;font-weight:900;color:#fff;margin-bottom:8px;">Pay at the Cinema Counter</div>
+                    <div style="font-size:13px;color:#aaa;line-height:1.7;margin-bottom:16px;">
+                        Click <strong>Confirm Booking</strong> below to lock your seats.<br>
+                        Present your booking reference at the cinema hall counter.<br>
+                        Staff will process your payment on-site.
+                    </div>
+                </div>
+                <div class="notice notice-green" style="margin-bottom:16px;">
+                    ✅ <strong>Walk-in booking flow:</strong><br>
+                    1. Confirm here → seats are locked for you<br>
+                    2. Go to the cinema counter<br>
+                    3. Show ref: <strong style="color:#CE0000;">{{ booking.ref_code }}</strong><br>
+                    4. Staff verifies &amp; collects payment<br>
+                    5. Enjoy the show! 🎬
+                </div>
+                {% if booking.discount_status == 'pending_verification' %}
+                <div class="notice" style="background:rgba(255,140,0,.1);border:1px solid #cc6600;color:#ffaa44;margin-bottom:14px;">
+                    🪪 <strong>Discount ID Verification:</strong> Present your {{ booking.ticket_type }} ID at the counter for the discounted rate.
+                </div>
+                {% endif %}
+                <button class="pay-btn" onclick="doPayment('walk_in')">
+                    <span id="walk_in-lbl">🏛️ Confirm Walk-In Booking</span>
+                </button>
+            </div>
+
             <!-- GCash -->
-            <div id="form-gcash">
+            <div id="form-gcash" style="display:none;">
                 <div class="gcash-steps">
                     <div class="gcash-step"><div class="gsn">1</div><span>Open GCash app → tap <strong>Send Money</strong></span></div>
                     <div class="gcash-step"><div class="gsn">2</div><span>Send to the number below, enter the exact amount</span></div>
@@ -270,7 +310,7 @@
 
 <script>
 const REF = '{{ booking.ref_code }}';
-let method = 'gcash';
+let method = 'walk_in';
 
 // Countdown
 let secsLeft = {{ secs_left }};
@@ -283,7 +323,7 @@ const cEl = document.getElementById('countdown');
 
 function sw(m){
     method=m;
-    ['gcash','maya','credit_card','debit_card'].forEach(id=>{
+    ['walk_in','gcash','maya','credit_card','debit_card'].forEach(id=>{
         document.getElementById('form-'+id).style.display=id===m?'':'none';
         document.getElementById('tab-'+id).classList.toggle('active',id===m);
     });
@@ -298,7 +338,9 @@ function fmtCard(inp,bid){
 function fmtExp(inp){let v=inp.value.replace(/\D/g,'').slice(0,4);if(v.length>2)v=v.slice(0,2)+' / '+v.slice(2);inp.value=v;}
 
 function validate(){
-    if(method==='gcash'){
+    if(method==='walk_in'){
+        return null; // No additional validation needed for walk-in
+    } else if(method==='gcash'){
         const n=document.getElementById('gcash-num').value.replace(/\D/g,'');
         if(n.length!==11)return'Enter a valid GCash number (09XXXXXXXXX).';
     } else if(method==='maya'){
@@ -359,9 +401,9 @@ function setErr(msg){
 
 function showResult(status,msg,pid){
     const ov=document.getElementById('resultOv');ov.classList.add('show');
-    const icons={paid:'🎉',failed:'❌',pending:'⏳',processing:'⏳',error:'⚠️'};
-    const titles={paid:'Booking Confirmed!',failed:'Payment Failed',pending:'Payment Pending',processing:'Processing…',error:'Error'};
-    const colors={paid:'#4caf50',failed:'#cc0000',pending:'#cc8800'};
+    const icons={paid:'🎉',failed:'❌',pending:'🏛️',processing:'⏳',error:'⚠️'};
+    const titles={paid:'Booking Confirmed!',failed:'Payment Failed',pending:'Walk-In Booking Confirmed',processing:'Processing…',error:'Error'};
+    const colors={paid:'#4caf50',failed:'#cc0000',pending:'#CE0000'};
     document.getElementById('ri').textContent=icons[status]||'⚠️';
     document.getElementById('rt').textContent=titles[status]||status;
     document.getElementById('rm').textContent=msg||'';

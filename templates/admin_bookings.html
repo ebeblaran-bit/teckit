@@ -75,6 +75,13 @@
                 <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
             </select>
+            <select class="filter-select" id="paymentFilter" onchange="filterBookings()">
+                <option value="">All Payments</option>
+                <option value="pending">Pending</option>
+                <option value="paid">Paid</option>
+                <option value="failed">Failed</option>
+                <option value="refunded">Refunded</option>
+            </select>
         </div>
 
         <!-- TABLE -->
@@ -82,18 +89,19 @@
             <div class="panel-body" style="padding:0;">
                 <div class="admin-table-wrap">
                     <table class="admin-table" id="bookingsTable">
+                        <!-- Payment filter -->
                         <thead>
                             <tr>
                                 <th>Ref #</th>
                                 <th>Customer</th>
                                 <th>Movie</th>
-                                <th>Cinema</th>
-                                <th>Show Date</th>
-                                <th>Show Time</th>
+                                <th>Cinema / Hall</th>
+                                <th>Show Date/Time</th>
                                 <th>Seats</th>
                                 <th>Tickets</th>
-                                <th>Type</th>
+                                <th>Type / Discount</th>
                                 <th>Total</th>
+                                <th>Payment</th>
                                 <th>Status</th>
                                 <th>Actions</th>
                             </tr>
@@ -101,21 +109,50 @@
                         <tbody id="bookingsBody">
                             {% for b in bookings %}
                             <tr data-search="{{ (b.booking_ref ~ ' ' ~ b.customer_name ~ ' ' ~ b.movie_title)|lower }}"
-                                data-status="{{ b.status|lower }}">
+                                data-status="{{ b.status|lower }}"
+                                data-payment="{{ b.payment_status|lower }}">
                                 <td><code style="color:#CE0000;font-size:11px;">{{ b.booking_ref }}</code></td>
                                 <td style="min-width:130px;">
                                     <div style="font-weight:700;font-size:13px;">{{ b.customer_name }}</div>
                                     <div style="font-size:11px;color:#777;">{{ b.contact or '' }}</div>
                                 </td>
                                 <td style="font-weight:700;min-width:130px;">{{ b.movie_title }}</td>
-                                <td style="font-size:12px;color:#aaa;">{{ b.cinema_name }}</td>
-                                <td style="white-space:nowrap;">{{ b.show_date }}</td>
-                                <td style="white-space:nowrap;">{{ b.show_time }}</td>
+                                <td style="font-size:12px;">
+                                    <div style="color:#aaa;">{{ b.cinema_name }}</div>
+                                    {% if b.hall_name %}<div style="color:#CE0000;font-size:11px;font-weight:700;">🏛️ {{ b.hall_name }}</div>{% endif %}
+                                </td>
+                                <td style="white-space:nowrap;font-size:12px;">
+                                    {{ b.show_date }}<br>
+                                    <span style="color:#CE0000;font-weight:700;">{{ b.show_time }}</span>
+                                </td>
                                 <td style="font-size:12px;">{{ b.seat_codes }}</td>
                                 <td style="text-align:center;">{{ b.ticket_count }}</td>
-                                <td style="font-size:12px;">{{ b.ticket_type }}</td>
+                                <td style="font-size:12px;">
+                                    {{ b.ticket_type }}
+                                    {% if b.discount_status == 'pending_verification' %}
+                                        <br><span class="badge" style="font-size:9px;background:rgba(255,140,0,.15);color:#ffaa44;border:1px solid #cc6600;">⏳ Pending ID</span>
+                                    {% elif b.discount_status == 'verified' %}
+                                        <br><span class="badge" style="font-size:9px;background:rgba(76,175,80,.15);color:#4caf50;border:1px solid #4caf50;">✅ Verified</span>
+                                    {% elif b.discount_status == 'rejected' %}
+                                        <br><span class="badge" style="font-size:9px;background:rgba(204,0,0,.15);color:#ff8888;border:1px solid #cc0000;">❌ Rejected</span>
+                                    {% endif %}
+                                    {% if b.verification_details %}
+                                        <br><small style="color:#555;font-size:10px;">{{ b.verification_details }}</small>
+                                    {% endif %}
+                                </td>
                                 <td style="color:#4caf50;font-weight:700;white-space:nowrap;">
                                     ₱{{ "{:,.0f}".format(b.total_price) }}
+                                </td>
+                                <td>
+                                    {% if b.payment_status == 'paid' %}
+                                        <span class="badge" style="background:rgba(76,175,80,.15);color:#4caf50;border:1px solid #4caf50;">✅ Paid</span>
+                                    {% elif b.payment_status == 'pending' %}
+                                        <span class="badge" style="background:rgba(255,170,0,.15);color:#ffd966;border:1px solid #cc8800;">⏳ Pending</span>
+                                    {% elif b.payment_status == 'failed' %}
+                                        <span class="badge" style="background:rgba(204,0,0,.15);color:#ff8888;border:1px solid #cc0000;">❌ Failed</span>
+                                    {% elif b.payment_status == 'refunded' %}
+                                        <span class="badge" style="background:rgba(100,150,255,.15);color:#99bbff;border:1px solid #4466cc;">↩️ Refunded</span>
+                                    {% endif %}
                                 </td>
                                 <td>
                                     <span class="badge badge-{{ b.status|lower }}">{{ b.status }}</span>
@@ -123,6 +160,17 @@
                                 <td>
                                     <div class="tbl-actions">
                                         {% if b.status == 'Confirmed' %}
+                                        {% if b.payment_status == 'pending' %}
+                                        <!-- Mark as paid (walk-in counter confirmation) -->
+                                        <form method="POST" action="/admin/bookings/mark-paid" style="display:inline;">
+                                            <input type="hidden" name="ref_code" value="{{ b.booking_ref }}">
+                                            <button type="submit" class="tbl-btn"
+                                                style="background:rgba(76,175,80,.15);color:#4caf50;border:1px solid #4caf50;"
+                                                onclick="return confirm('Mark booking {{ b.booking_ref }} as PAID? This confirms walk-in payment.')">
+                                                ✅ Mark Paid
+                                            </button>
+                                        </form>
+                                        {% endif %}
                                         <form method="POST" action="/admin/bookings/cancel" style="display:inline;">
                                             <input type="hidden" name="ref_code" value="{{ b.booking_ref }}">
                                             <button type="submit" class="tbl-btn tbl-btn-delete"
@@ -158,10 +206,12 @@
 function filterBookings() {
     const q  = document.getElementById('bookingSearch').value.toLowerCase();
     const st = document.getElementById('statusFilter').value.toLowerCase();
+    const pm = document.getElementById('paymentFilter').value.toLowerCase();
     document.querySelectorAll('#bookingsBody tr[data-search]').forEach(row => {
         const searchMatch  = row.dataset.search.includes(q);
         const statusMatch  = !st || row.dataset.status === st;
-        row.style.display  = searchMatch && statusMatch ? '' : 'none';
+        const payMatch     = !pm || (row.dataset.payment || '').toLowerCase() === pm;
+        row.style.display  = searchMatch && statusMatch && payMatch ? '' : 'none';
     });
 }
 </script>

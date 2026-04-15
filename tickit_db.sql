@@ -1,6 +1,9 @@
 -- ============================================================
 --  TICK.IT — MySQL Schema
 --  Run this in MySQL Workbench before starting the Flask app
+--
+--  For a FRESH install: run the entire file.
+--  For an EXISTING DB:  see the "MIGRATIONS" section at bottom.
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS tickit_db
@@ -46,11 +49,30 @@ CREATE TABLE IF NOT EXISTS cinemas (
     screens  TINYINT UNSIGNED NOT NULL DEFAULT 1
 );
 
+-- ── CINEMA HALLS ──────────────────────────────────────────────
+-- Create before showings so the FK reference is valid
+CREATE TABLE IF NOT EXISTS cinema_halls (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    cinema_id   INT NOT NULL,
+    hall_name   VARCHAR(100) NOT NULL,
+    rows_count  TINYINT UNSIGNED NOT NULL DEFAULT 8,
+    cols_count  TINYINT UNSIGNED NOT NULL DEFAULT 10,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (cinema_id) REFERENCES cinemas(id) ON DELETE CASCADE,
+    UNIQUE KEY uq_hall (cinema_id, hall_name)
+);
+
 -- ── SHOWINGS ─────────────────────────────────────────────────
+-- hall_id is nullable: each showing is assigned to a specific hall.
+-- UNIQUE on (hall_id, show_date, show_time) so one hall can only have
+-- one movie at a given date+time slot.
+-- (movie_id, cinema_id, show_date, show_time) unique key is removed
+--  because two different halls in same cinema can run same movie.
 CREATE TABLE IF NOT EXISTS showings (
     id          INT AUTO_INCREMENT PRIMARY KEY,
     movie_id    INT NOT NULL,
     cinema_id   INT NOT NULL,
+    hall_id     INT NULL,
     show_date   DATE NOT NULL,
     show_time   TIME NOT NULL,
     total_seats TINYINT UNSIGNED NOT NULL DEFAULT 50,
@@ -58,7 +80,8 @@ CREATE TABLE IF NOT EXISTS showings (
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (movie_id)  REFERENCES movies(id)  ON DELETE CASCADE,
     FOREIGN KEY (cinema_id) REFERENCES cinemas(id) ON DELETE CASCADE,
-    UNIQUE KEY uq_showing (movie_id, cinema_id, show_date, show_time)
+    FOREIGN KEY (hall_id)   REFERENCES cinema_halls(id) ON DELETE SET NULL,
+    UNIQUE KEY uq_showing_hall (hall_id, show_date, show_time)
 );
 
 -- ── SEATS ────────────────────────────────────────────────────
@@ -77,48 +100,30 @@ CREATE TABLE IF NOT EXISTS seats (
 
 -- ── BOOKINGS ─────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS bookings (
-    id               INT AUTO_INCREMENT PRIMARY KEY,
-    user_id          INT NOT NULL,
-    showing_id       INT NOT NULL,
-    seat_id          INT NOT NULL,
-    booking_ref      VARCHAR(20),
-    ref_code         VARCHAR(20) NOT NULL,
-    ticket_type      ENUM('Regular','Student','Senior / PWD') NOT NULL DEFAULT 'Regular',
-    ticket_count     TINYINT UNSIGNED NOT NULL DEFAULT 1,
-    unit_price       SMALLINT UNSIGNED NOT NULL DEFAULT 450,
-    total_price      DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-    seat_codes       VARCHAR(500),
-    customer_name    VARCHAR(255) NOT NULL,
-    contact          VARCHAR(20)  NOT NULL,
-    special_requests TEXT,
-    status           ENUM('Confirmed','Cancelled','Completed') NOT NULL DEFAULT 'Confirmed',
-    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    id                   INT AUTO_INCREMENT PRIMARY KEY,
+    user_id              INT NOT NULL,
+    showing_id           INT NOT NULL,
+    seat_id              INT NOT NULL,
+    booking_ref          VARCHAR(20),
+    ref_code             VARCHAR(20) NOT NULL,
+    ticket_type          ENUM('Regular','Student','Senior / PWD') NOT NULL DEFAULT 'Regular',
+    ticket_count         TINYINT UNSIGNED NOT NULL DEFAULT 1,
+    unit_price           SMALLINT UNSIGNED NOT NULL DEFAULT 450,
+    total_price          DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    seat_codes           VARCHAR(500),
+    customer_name        VARCHAR(255) NOT NULL,
+    contact              VARCHAR(20)  NOT NULL,
+    special_requests     TEXT,
+    discount_status      ENUM('none','pending_verification','verified','rejected') NOT NULL DEFAULT 'none',
+    payment_status       ENUM('pending','paid','failed','refunded') NOT NULL DEFAULT 'pending',
+    verification_details TEXT NULL,
+    status               ENUM('Confirmed','Cancelled','Completed') NOT NULL DEFAULT 'Confirmed',
+    created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id)    REFERENCES users(id)    ON DELETE CASCADE,
     FOREIGN KEY (showing_id) REFERENCES showings(id) ON DELETE CASCADE,
     FOREIGN KEY (seat_id)    REFERENCES seats(id)    ON DELETE CASCADE,
     INDEX idx_ref_code (ref_code),
     INDEX idx_user_id  (user_id)
-);
-
--- ── SEED CINEMAS ─────────────────────────────────────────────
-INSERT IGNORE INTO cinemas (name, location, screens) VALUES
-    ('SM Seaside Cebu',           'SRP, Cebu City',        6),
-    ('Gaisano Grand Minglanilla', 'Minglanilla, Cebu',     4),
-    ('Nustar Cebu Cinema',        'SRP, Cebu City',        5),
-    ('Cebu IL CORSO Cinema',      'South Road Properties', 4),
-    ('UC Cantao-an',              'Naga, Cebu',            2),
-    ('TOPS Cebu Skydom',          'Busay, Cebu City',      3);
-
--- ── CINEMA HALLS ──────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS cinema_halls (
-    id          INT AUTO_INCREMENT PRIMARY KEY,
-    cinema_id   INT NOT NULL,
-    hall_name   VARCHAR(100) NOT NULL,
-    rows_count  TINYINT UNSIGNED NOT NULL DEFAULT 8,
-    cols_count  TINYINT UNSIGNED NOT NULL DEFAULT 10,
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (cinema_id) REFERENCES cinemas(id) ON DELETE CASCADE,
-    UNIQUE KEY uq_hall (cinema_id, hall_name)
 );
 
 -- ── HALL SEAT CONFIG ─────────────────────────────────────────
@@ -140,7 +145,7 @@ CREATE TABLE IF NOT EXISTS payments (
     booking_ref       VARCHAR(20) NOT NULL,
     user_id           INT NULL,
     amount            DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-    payment_method    VARCHAR(50) NOT NULL DEFAULT 'credit_card',
+    payment_method    VARCHAR(50) NOT NULL DEFAULT 'walk_in',
     paymongo_link_id  VARCHAR(100) NULL,
     status            ENUM('pending','paid','failed','refunded') NOT NULL DEFAULT 'pending',
     created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -150,17 +155,31 @@ CREATE TABLE IF NOT EXISTS payments (
     INDEX idx_user_id     (user_id)
 );
 
--- ── SHOWINGS — add hall_id (nullable FK, references cinema_halls) ─
-ALTER TABLE showings
-    ADD COLUMN IF NOT EXISTS hall_id INT NULL AFTER cinema_id,
-    ADD CONSTRAINT fk_showing_hall FOREIGN KEY (hall_id)
-        REFERENCES cinema_halls(id) ON DELETE SET NULL;
+-- ── SEED CINEMAS ─────────────────────────────────────────────
+INSERT IGNORE INTO cinemas (name, location, screens) VALUES
+    ('SM Seaside Cebu',           'SRP, Cebu City',        6),
+    ('Gaisano Grand Minglanilla', 'Minglanilla, Cebu',     4),
+    ('Nustar Cebu Cinema',        'SRP, Cebu City',        5),
+    ('Cebu IL CORSO Cinema',      'South Road Properties', 4),
+    ('UC Cantao-an',              'Naga, Cebu',            2),
+    ('TOPS Cebu Skydom',          'Busay, Cebu City',      3);
 
--- ── BOOKINGS — add discount_status and payment_status columns ─
-ALTER TABLE bookings
-    ADD COLUMN IF NOT EXISTS discount_status
-        ENUM('none','pending_verification','verified','rejected')
-        NOT NULL DEFAULT 'none' AFTER special_requests,
-    ADD COLUMN IF NOT EXISTS payment_status
-        ENUM('pending','paid','failed','refunded')
-        NOT NULL DEFAULT 'pending' AFTER discount_status;
+
+-- ============================================================
+--  MIGRATIONS — run these ONLY on an EXISTING database
+--  (skip if you are running a fresh install above)
+-- ============================================================
+
+-- Add hall_id to showings (if upgrading from old schema without it)
+-- ALTER TABLE showings ADD COLUMN IF NOT EXISTS hall_id INT NULL AFTER cinema_id;
+-- ALTER TABLE showings ADD CONSTRAINT fk_showing_hall FOREIGN KEY (hall_id) REFERENCES cinema_halls(id) ON DELETE SET NULL;
+
+-- Update showings unique key to be hall-based (run in order):
+-- ALTER TABLE showings DROP INDEX uq_showing;
+-- ALTER TABLE showings ADD UNIQUE KEY uq_showing_hall (hall_id, show_date, show_time);
+
+-- Add discount_status, payment_status, verification_details to bookings (if missing):
+-- ALTER TABLE bookings
+--     ADD COLUMN IF NOT EXISTS discount_status ENUM('none','pending_verification','verified','rejected') NOT NULL DEFAULT 'none' AFTER special_requests,
+--     ADD COLUMN IF NOT EXISTS payment_status  ENUM('pending','paid','failed','refunded') NOT NULL DEFAULT 'pending' AFTER discount_status,
+--     ADD COLUMN IF NOT EXISTS verification_details TEXT NULL AFTER payment_status;

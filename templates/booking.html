@@ -216,6 +216,9 @@
                    class="showing-card {% if is_full %}showing-full{% endif %}">
                     <div class="sc-time">{{ sh.show_time_fmt }}</div>
                     <div class="sc-cinema">{{ sh.cinema_name }}</div>
+                    {% if sh.hall_name %}
+                    <div class="sc-hall" style="font-size:11px;color:#CE0000;font-weight:700;margin-top:2px;">🏛️ {{ sh.hall_name }}</div>
+                    {% endif %}
                     <div class="sc-location">{{ sh.cinema_location }}</div>
                     <div class="sc-avail sc-avail-{{ sh.avail_class }}">
                         {% if sh.avail_class == 'full' %}🔴 SOLD OUT
@@ -381,6 +384,7 @@
                             <span class="tt-btn">
                                 <span class="tt-name">Student</span>
                                 <span class="tt-price">₱350</span>
+                                <span style="font-size:9px;color:#ffaa44;display:block;margin-top:2px;">ID required</span>
                             </span>
                         </label>
                         <label class="tt-option">
@@ -388,8 +392,36 @@
                             <span class="tt-btn">
                                 <span class="tt-name">Senior/PWD</span>
                                 <span class="tt-price">₱360</span>
+                                <span style="font-size:9px;color:#ffaa44;display:block;margin-top:2px;">ID required</span>
                             </span>
                         </label>
+                    </div>
+                    <!-- VIP surcharge notice -->
+                    <div id="vipPriceNotice" style="display:none;margin-top:8px;padding:8px 12px;background:rgba(255,200,0,.08);border:1px solid #665500;border-radius:6px;font-size:12px;color:#ffc800;">
+                        ⭐ VIP seats include a ₱150 surcharge on top of the base ticket price.
+                    </div>
+                </div>
+
+                <!-- Discount Verification Fields (shown for Student / PWD) -->
+                <div id="verificationSection" style="display:none;">
+                    <div style="padding:12px 14px;background:rgba(255,140,0,.1);border:1px solid #cc6600;border-radius:8px;margin-bottom:12px;font-size:12px;color:#ffaa44;line-height:1.6;">
+                        <strong>⚠️ Discount Verification Required</strong><br>
+                        Please provide your ID details below. Your booking will be confirmed at <strong>Regular price</strong> initially.
+                        Staff will verify your ID at the cinema — if verified, the discounted price applies.
+                        If not verified, the Regular price (₱450) applies.
+                    </div>
+                    <div class="bf-field">
+                        <label class="bf-label" id="verIdLabel">🪪 Student ID Number</label>
+                        <input type="text" name="verification_id" id="verificationIdInput" class="bf-input"
+                               placeholder="Enter your ID number (e.g. 2021-12345)" maxlength="50">
+                    </div>
+                    <div class="bf-field" id="verTypeField" style="display:none;">
+                        <label class="bf-label">📋 PWD / Senior Type</label>
+                        <select name="verification_type" class="bf-input" id="verTypeSelect">
+                            <option value="">Select type...</option>
+                            <option value="PWD">Person with Disability (PWD)</option>
+                            <option value="Senior Citizen">Senior Citizen (60+)</option>
+                        </select>
                     </div>
                 </div>
 
@@ -425,8 +457,8 @@
                         onclick="return validateForm()">
                     Confirm Booking →
                 </button>
-                <div class="confirm-note">
-                    💳 Payment is collected at the cinema counter. No online payment required.
+                <div class="confirm-note" id="confirmNote">
+                    💳 You will proceed to payment after confirming. Walk-in payments are collected at the cinema counter.
                 </div>
             </form>
         </div>
@@ -465,16 +497,26 @@ setTimeout(() => {
 
 // ── Seat selection logic ─────────────────────────
 const PRICES = { 'Regular': 450, 'Student': 350, 'Senior / PWD': 360 };
+const VIP_SURCHARGE = 150;  // matches server-side VIP_SURCHARGE
 let selectedSeats = {};  // { seat_id: { code, category, locked } }
 let lockTimer = null;
 let lockSeconds = 300; // 5 min
 
 const SHOWING_ID = {{ showing_id or 'null' }};
 
-function getPrice() {
+function getBasePrice() {
     const checked = document.querySelector('input[name="ticket_type"]:checked');
     return checked ? (PRICES[checked.value] || 450) : 450;
 }
+
+function getSeatPrice(category) {
+    const base = getBasePrice();
+    // VIP seats always add the VIP surcharge on top of base price
+    return (category === 'VIP') ? base + VIP_SURCHARGE : base;
+}
+
+// Keep getPrice() for backwards compatibility
+function getPrice() { return getBasePrice(); }
 
 function toggleSeat(el) {
     const status   = el.dataset.status;
@@ -543,9 +585,8 @@ function toggleSeat(el) {
 }
 
 function updateSummary() {
-    const keys   = Object.keys(selectedSeats);
-    const price  = getPrice();
-    const total  = keys.length * price;
+    const keys  = Object.keys(selectedSeats);
+    let total   = 0;
 
     document.getElementById('seatIdsInput').value = keys.join(',');
     document.getElementById('ssEmpty').style.display = keys.length ? 'none' : 'flex';
@@ -553,12 +594,15 @@ function updateSummary() {
     const list = document.getElementById('ssSeats');
     list.innerHTML = '';
     keys.forEach(id => {
-        const s   = selectedSeats[id];
-        const div = document.createElement('div');
+        const s     = selectedSeats[id];
+        const price = getSeatPrice(s.category);
+        total      += price;
+        const div   = document.createElement('div');
         div.className = 'ss-seat-item';
+        const isVip = s.category === 'VIP';
         div.innerHTML = `
-            <span class="ss-seat-code ${s.category === 'VIP' ? 'tag-vip' : 'tag-std'}">${s.code}</span>
-            <span class="ss-cat">${s.category}</span>
+            <span class="ss-seat-code ${isVip ? 'tag-vip' : 'tag-std'}">${s.code}</span>
+            <span class="ss-cat">${s.category}${isVip ? ' <small style="color:#ffcc00;font-size:10px;">(+VIP)</small>' : ''}</span>
             <span class="ss-seat-price">₱${price.toLocaleString()}</span>
         `;
         list.appendChild(div);
@@ -570,6 +614,9 @@ function updateSummary() {
 
     const form = document.getElementById('bookingForm');
     if (form) form.style.display = keys.length ? 'block' : 'none';
+
+    // Show/hide discount verification fields based on ticket type selection
+    updateVerificationFields();
 }
 
 // ── Lock countdown timer ─────────────────────────
@@ -601,13 +648,49 @@ function startLockTimer() {
     }, 1000);
 }
 
+// ── Discount verification field toggle ───────────
+function updateVerificationFields() {
+    const ticketType = document.querySelector('input[name="ticket_type"]:checked')?.value || 'Regular';
+    const verSection = document.getElementById('verificationSection');
+    const verIdLabel = document.getElementById('verIdLabel');
+    const verTypeField = document.getElementById('verTypeField');
+    const verInput   = document.getElementById('verificationIdInput');
+
+    // Show/hide VIP notice
+    const hasVip = Object.values(selectedSeats).some(s => s.category === 'VIP');
+    const vipNotice = document.getElementById('vipPriceNotice');
+    if (vipNotice) vipNotice.style.display = hasVip ? 'block' : 'none';
+
+    if (ticketType === 'Student') {
+        verSection.style.display = 'block';
+        verIdLabel.textContent = '🪪 Student ID Number';
+        verTypeField.style.display = 'none';
+        if (verInput) verInput.placeholder = 'Enter your school ID number (e.g. 2021-12345)';
+    } else if (ticketType === 'Senior / PWD') {
+        verSection.style.display = 'block';
+        verIdLabel.textContent = '🪪 PWD ID / Senior Citizen ID Number';
+        verTypeField.style.display = 'block';
+        if (verInput) verInput.placeholder = 'Enter your PWD or Senior Citizen ID number';
+    } else {
+        verSection.style.display = 'none';
+        if (verInput) verInput.value = '';
+    }
+}
+
 // ── Form validation ──────────────────────────────
 function validateForm() {
-    const contact = document.querySelector('input[name="contact"]').value.trim();
-    const name    = document.querySelector('input[name="customer_name"]').value.trim();
+    const contact    = document.querySelector('input[name="contact"]').value.trim();
+    const name       = document.querySelector('input[name="customer_name"]').value.trim();
+    const ticketType = document.querySelector('input[name="ticket_type"]:checked')?.value || 'Regular';
+    const verInput   = document.getElementById('verificationIdInput');
     if (!name || name.length < 2) { showToast('Please enter your full name.', 'error'); return false; }
     if (!/^(\+63|0)\d{10}$/.test(contact)) { showToast('Enter a valid PH mobile: 09XXXXXXXXX', 'error'); return false; }
     if (Object.keys(selectedSeats).length === 0) { showToast('Please select at least one seat.', 'error'); return false; }
+    if (ticketType !== 'Regular' && verInput && !verInput.value.trim()) {
+        showToast('Please enter your ID number for discount verification.', 'error');
+        verInput.focus();
+        return false;
+    }
     return true;
 }
 

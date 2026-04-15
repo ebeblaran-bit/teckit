@@ -65,13 +65,39 @@
                 <div class="mbc-status mbc-status-{{ b.status.lower() }}">{{ b.status }}</div>
             </div>
             <div class="mbc-grid">
-                <div class="mbc-item"><span class="mbc-lbl">📍 Cinema</span><span class="mbc-val">{{ b.cinema }}</span></div>
+                <div class="mbc-item">
+                    <span class="mbc-lbl">📍 Cinema</span>
+                    <span class="mbc-val">{{ b.cinema }}{% if b.hall_name %} <span style="color:#CE0000;font-size:11px;">· 🏛️ {{ b.hall_name }}</span>{% endif %}</span>
+                </div>
                 <div class="mbc-item"><span class="mbc-lbl">📅 Date</span><span class="mbc-val">{{ b.date }}</span></div>
                 <div class="mbc-item"><span class="mbc-lbl">🕐 Showtime</span><span class="mbc-val">{{ b.showtime }}</span></div>
                 <div class="mbc-item"><span class="mbc-lbl">💺 Seats</span><span class="mbc-val">{{ b.seats }}</span></div>
                 <div class="mbc-item"><span class="mbc-lbl">🎫 Type</span><span class="mbc-val">{{ b.ticket_type }}</span></div>
-                <div class="mbc-item"><span class="mbc-lbl">💰 Total</span><span class="mbc-val mbc-total">₱{{ b.total }}</span></div>
+                <div class="mbc-item"><span class="mbc-lbl">💰 Total</span><span class="mbc-val mbc-total">₱{{ "{:,.0f}".format(b.total) }}</span></div>
             </div>
+
+            <!-- Payment & Discount Status Row -->
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+                {% if b.payment_status == 'paid' %}
+                    <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:5px;background:rgba(76,175,80,.15);color:#4caf50;border:1px solid #4caf50;">✅ Paid</span>
+                {% elif b.payment_status == 'pending' %}
+                    <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:5px;background:rgba(255,170,0,.15);color:#ffd966;border:1px solid #cc8800;">⏳ Payment Pending</span>
+                    <a href="/payment/checkout?ref={{ b.ref }}" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:5px;background:rgba(206,0,0,.15);color:#CE0000;border:1px solid #CE0000;text-decoration:none;">💳 Complete Payment →</a>
+                {% elif b.payment_status == 'failed' %}
+                    <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:5px;background:rgba(204,0,0,.15);color:#ff8888;border:1px solid #cc0000;">❌ Payment Failed</span>
+                {% elif b.payment_status == 'refunded' %}
+                    <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:5px;background:rgba(100,150,255,.15);color:#99bbff;border:1px solid #4466cc;">↩️ Refunded</span>
+                {% endif %}
+
+                {% if b.discount_status == 'pending_verification' %}
+                    <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:5px;background:rgba(255,140,0,.15);color:#ffaa44;border:1px solid #cc6600;">🪪 ID Verification Pending — Present ID at cinema</span>
+                {% elif b.discount_status == 'verified' %}
+                    <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:5px;background:rgba(76,175,80,.1);color:#7fff7f;border:1px solid #2a6a2a;">✅ Discount Verified</span>
+                {% elif b.discount_status == 'rejected' %}
+                    <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:5px;background:rgba(204,0,0,.1);color:#ff8888;border:1px solid #660000;">❌ Discount Rejected — Regular price applies</span>
+                {% endif %}
+            </div>
+
             <div class="mbc-footer">
                 <span class="mbc-ref">Ref: <strong>{{ b.ref }}</strong></span>
                 <span class="mbc-booked-on">Booked on {{ b.booked_on }}</span>

@@ -59,7 +59,7 @@ PAY_FAILED_RATE  = 0.15
 PAYMONGO_SECRET_KEY = ''
 PAYMONGO_PUBLIC_KEY = 'pk_test_1nfGmEUQPQKzvcQ2jeBzGBKC'
 PAYMONGO_BASE_URL   = 'https://api.paymongo.com/v1'
-USE_PAYMONGO        = (PAYMONGO_SECRET_KEY != 'sk_test_REPLACE_WITH_YOUR_TEST_KEY'
+USE_PAYMONGO        = (bool(PAYMONGO_SECRET_KEY)
                        and REQUESTS_AVAILABLE)
 
 
@@ -674,12 +674,14 @@ def seat_status(showing_id):
 @app.route('/booking/confirm', methods=['POST'])
 @login_required
 def confirm_booking():
-    seat_ids_raw  = request.form.get('seat_ids', '').strip()
-    showing_id    = request.form.get('showing_id', type=int)
-    ticket_type   = request.form.get('ticket_type', 'Regular')
-    customer_name = request.form.get('customer_name', '').strip()
-    contact       = request.form.get('contact', '').strip()
-    special       = request.form.get('special_requests', '').strip()
+    seat_ids_raw        = request.form.get('seat_ids', '').strip()
+    showing_id          = request.form.get('showing_id', type=int)
+    ticket_type         = request.form.get('ticket_type', 'Regular')
+    customer_name       = request.form.get('customer_name', '').strip()
+    contact             = request.form.get('contact', '').strip()
+    special             = request.form.get('special_requests', '').strip()
+    verification_id     = request.form.get('verification_id', '').strip()
+    verification_type   = request.form.get('verification_type', '').strip()
 
     errors = {}
     if not seat_ids_raw:
@@ -692,6 +694,9 @@ def confirm_booking():
         errors['contact'] = 'Enter a valid PH mobile (09XXXXXXXXX).'
     if ticket_type not in TICKET_PRICES:
         errors['ticket_type'] = 'Invalid ticket type.'
+    # Require verification ID for Student/PWD bookings
+    if ticket_type in ('Student', 'Senior / PWD') and not verification_id:
+        errors['verification_id'] = 'Please provide your Student ID / PWD ID number for verification.'
 
     seat_ids = [int(x) for x in seat_ids_raw.split(',') if x.strip().isdigit()]
     if not seat_ids:
@@ -722,8 +727,14 @@ def confirm_booking():
         ref_code    = 'TKT-' + uuid.uuid4().hex[:8].upper()
 
         discount_status = 'none'
+        verification_details = None
         if ticket_type in ('Student', 'Senior / PWD'):
             discount_status = 'pending_verification'
+            # Store the provided ID details for admin review
+            id_label = 'Student ID' if ticket_type == 'Student' else 'PWD/Senior ID'
+            verification_details = f'{id_label}: {verification_id}'
+            if verification_type:
+                verification_details += f' | Type: {verification_type}'
 
         # Price seats (VIP seats automatically cost more)
         placeholders = ','.join(['%s'] * len(seat_ids))
@@ -765,11 +776,12 @@ def confirm_booking():
                     (user_id, showing_id, seat_id, booking_ref, ref_code,
                      ticket_type, ticket_count, unit_price, total_price,
                      seat_codes, customer_name, contact, special_requests,
-                     discount_status, payment_status, status)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'pending','Confirmed')
+                     discount_status, payment_status, verification_details, status)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'pending',%s,'Confirmed')
             """, (session['user_id'], showing_id, sid, ref_code, ref_code,
                   ticket_type, len(seat_ids), unit_price, total_price,
-                  seat_codes_str, customer_name, contact, special, discount_status))
+                  seat_codes_str, customer_name, contact, special,
+                  discount_status, verification_details))
 
         db.commit()
         db.close()
@@ -815,11 +827,6 @@ def payment_checkout():
     if not booking:
         flash('Booking not found or already processed.', 'error')
         return redirect(url_for('booking'))
-
-    # If discount is selected but not yet verified, block online payment (walk-in verification first)
-    if booking.get('discount_status') == 'pending_verification':
-        flash('Discount verification required before payment. Please have staff/admin verify your Student/PWD discount first.', 'warning')
-        return redirect(url_for('my_bookings'))
 
     # If already paid, go straight to result
     if booking['payment_status'] == 'paid':
@@ -904,6 +911,22 @@ def payment_process():
                 # If PayMongo API call fails, fall through to simulation
                 db.close()
                 return jsonify({'ok': False, 'msg': f'PayMongo error: {str(e)}', 'status': 'error'})
+
+        # ── WALK-IN PAYMENT — confirmed at counter ───────────────────────────
+        if method == 'walk_in':
+            walkin_ref = 'WALKIN-' + uuid.uuid4().hex[:8].upper()
+            execute(db, """
+                INSERT INTO payments
+                    (booking_ref, user_id, amount, payment_method, paymongo_link_id, status)
+                VALUES (%s,%s,%s,'walk_in',%s,'pending')
+            """, (ref_code, session['user_id'], amount, walkin_ref))
+            db.commit(); db.close()
+            return jsonify({
+                'ok':         True,
+                'status':     'pending',
+                'payment_id': walkin_ref,
+                'msg':        'Walk-in booking confirmed! Present ref ' + ref_code + ' at the cinema counter. Payment collected on-site.',
+            })
 
         # ── SIMULATION FALLBACK (when no real keys configured) ───────────────
         roll = random.random()
@@ -1129,12 +1152,14 @@ def my_bookings():
                b.discount_status, b.payment_status,
                st.seat_code, st.category,
                m.title AS movie, c.name AS cinema,
+               h.hall_name,
                s.show_date, s.show_time
         FROM bookings b
         JOIN seats    st ON st.id  = b.seat_id
         JOIN showings s  ON s.id   = b.showing_id
         JOIN movies   m  ON m.id   = s.movie_id
         JOIN cinemas  c  ON c.id   = s.cinema_id
+        LEFT JOIN cinema_halls h ON h.id = s.hall_id
         WHERE b.user_id = %s
         ORDER BY b.created_at DESC
     """, (session['user_id'],))
@@ -1155,6 +1180,7 @@ def my_bookings():
             'ref':             ref,
             'movie':           first['movie'],
             'cinema':          first['cinema'],
+            'hall_name':       first.get('hall_name'),
             'date':            date_fmt,
             'showtime':        _fmt_time(first['show_time']),
             'seats':           ', '.join(s['seat_code'] for s in seats),
@@ -1555,6 +1581,7 @@ def admin_hall_assign_movie(hall_id):
     for sd in show_dates:
         for st in show_times:
             try:
+                # Check by hall+date+time (a hall can only run one movie per timeslot)
                 existing = query(db, """
                     SELECT id FROM showings
                     WHERE hall_id=%s AND show_date=%s AND show_time=%s
@@ -1565,7 +1592,8 @@ def admin_hall_assign_movie(hall_id):
                 showing_id = execute(db, """
                     INSERT INTO showings (movie_id, cinema_id, hall_id, show_date, show_time, status)
                     VALUES (%s, %s, %s, %s, %s, 'open')
-                """, (movie_id, hall['cinema_id'], hall_id, sd, st))
+                    ON DUPLICATE KEY UPDATE hall_id=%s, status='open'
+                """, (movie_id, hall['cinema_id'], hall_id, sd, st, hall_id))
                 # Immediately seed seats from this hall's layout
                 seed_seats_from_hall(db, showing_id, hall_id)
                 created += 1
@@ -1762,17 +1790,53 @@ def admin_bookings():
     bookings_list = query(db, """
         SELECT b.id, b.booking_ref, b.customer_name, b.contact, b.total_price,
                b.status, b.ticket_count, b.ticket_type, b.seat_codes,
-               b.discount_status, b.payment_status,
+               b.discount_status, b.payment_status, b.verification_details,
                m.title AS movie_title, c.name AS cinema_name,
+               h.hall_name,
                s.show_date, s.show_time
         FROM bookings b
         JOIN showings s ON b.showing_id=s.id
         JOIN movies   m ON s.movie_id=m.id
         JOIN cinemas  c ON s.cinema_id=c.id
+        LEFT JOIN cinema_halls h ON h.id=s.hall_id
         ORDER BY b.id DESC
     """)
     db.close()
     return render_template('admin_bookings.html', bookings=bookings_list)
+
+@app.route('/admin/bookings/mark-paid', methods=['POST'])
+@admin_required
+def admin_bookings_mark_paid():
+    """Mark a walk-in booking as paid after staff collects payment at the counter."""
+    ref_code = request.form.get('ref_code', '').strip()
+    if not ref_code:
+        flash('Invalid booking reference.', 'error')
+        return redirect(url_for('admin_bookings'))
+    try:
+        db = get_db()
+        # Mark all seats for this ref as booked
+        seat_rows = query(db, "SELECT seat_id, showing_id FROM bookings WHERE ref_code=%s", (ref_code,))
+        for s in seat_rows:
+            execute(db, "UPDATE seats SET status='booked', locked_until=NULL WHERE id=%s", (s['seat_id'],))
+        execute(db,
+            "UPDATE bookings SET payment_status='paid', status='Confirmed' WHERE ref_code=%s",
+            (ref_code,))
+        execute(db,
+            "UPDATE payments SET status='paid', paid_at=NOW() WHERE booking_ref=%s",
+            (ref_code,))
+        # Check if showing is now full
+        if seat_rows:
+            avail = query(db,
+                "SELECT COUNT(*) AS cnt FROM seats WHERE showing_id=%s AND status='available'",
+                (seat_rows[0]['showing_id'],), one=True)['cnt']
+            if avail == 0:
+                execute(db, "UPDATE showings SET status='full' WHERE id=%s",
+                        (seat_rows[0]['showing_id'],))
+        db.commit(); db.close()
+        flash(f'Booking {ref_code} marked as PAID. Walk-in payment confirmed.', 'success')
+    except Exception as e:
+        flash(f'Error: {e}', 'error')
+    return redirect(url_for('admin_bookings'))
 
 @app.route('/admin/bookings/cancel', methods=['POST'])
 @admin_required
@@ -1805,6 +1869,7 @@ def admin_verifications():
     pending = query(db, """
         SELECT b.id, b.ref_code, b.customer_name, b.contact,
                b.ticket_type, b.discount_status, b.created_at,
+               b.verification_details, b.total_price, b.seat_codes,
                m.title AS movie, c.name AS cinema, s.show_date, s.show_time
         FROM bookings b
         JOIN showings s ON s.id=b.showing_id
