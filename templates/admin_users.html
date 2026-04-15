@@ -118,7 +118,8 @@
                                 <td>
                                     <div class="tbl-actions">
                                         <button class="tbl-btn tbl-btn-view"
-                                            onclick="viewUser({{ u|tojson }})">View</button>
+                                            data-user='{{ u|tojson }}'
+                                            onclick="viewUser(JSON.parse(this.dataset.user))">View</button>
                                         <form method="POST" action="/admin/users/delete" style="display:inline;">
                                             <input type="hidden" name="user_id" value="{{ u.id }}">
                                             <button type="submit" class="tbl-btn tbl-btn-delete"

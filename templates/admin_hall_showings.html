@@ -26,6 +26,7 @@
         .show-date-block .sd-day  { font-size: 28px; font-weight: 900; color: #fff; line-height: 1; }
         .show-date-block .sd-mon  { font-size: 13px; color: #CE0000; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin-top: 2px; }
         .show-date-block .sd-year { font-size: 11px; color: #888; margin-top: 1px; }
+        .show-date-block .sd-wday { font-size: 10px; color: #555; margin-top: 3px; }
         .show-time  { font-size: 20px; font-weight: 900; color: #CE0000; min-width: 90px; }
         .show-movie { font-weight: 700; font-size: 14px; color: #fff; flex: 1; }
         .show-seats { font-size: 12px; color: #888; min-width: 120px; }
@@ -33,7 +34,6 @@
         .show-seats .s-booked{ color: #ffcc00; font-weight: 700; }
         .seat-bar { height: 6px; background: #1a0000; border-radius: 3px; margin-top: 4px; overflow: hidden; }
         .seat-bar-fill { height: 100%; background: #4caf50; border-radius: 3px; transition: width .3s; }
-        .date-input-group { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
         .date-chip {
             display: inline-flex; align-items: center; gap: 6px;
             background: rgba(206,0,0,.15); border: 1px solid #CE0000;
@@ -62,6 +62,12 @@
         .empty-showings { text-align: center; padding: 48px 20px; }
         .empty-showings .ei { font-size: 48px; margin-bottom: 12px; }
         .empty-showings .et { font-size: 15px; font-weight: 700; color: #555; }
+        .auto-date-hint {
+            display: inline-flex; align-items: center; gap: 5px;
+            background: rgba(76,175,80,.1); border: 1px solid #2a6a2a;
+            border-radius: 6px; padding: 3px 8px; font-size: 11px; color: #7fff7f;
+            margin-left: 8px;
+        }
     </style>
 </head>
 <body>
@@ -133,25 +139,35 @@
                 {% set pct   = ((s.booked / total) * 100)|int %}
                 <div class="show-card">
                     <!-- Date block -->
-                    <div class="show-date-block">
-                        <div class="sd-day">{{ s.show_date.strftime('%d') if s.show_date.strftime is defined else s.show_date }}</div>
-                        <div class="sd-mon">{{ s.show_date.strftime('%b') if s.show_date.strftime is defined else '' }}</div>
-                        <div class="sd-year">{{ s.show_date.strftime('%Y') if s.show_date.strftime is defined else '' }}</div>
-                        {% if s.show_date.strftime is defined %}
-                        <div style="font-size:10px;color:#555;margin-top:3px;">{{ s.show_date.strftime('%A') }}</div>
+                    <div class="show-date-block" data-raw-date="{{ s.show_date }}">
+                        {% if s.show_date and s.show_date is not none %}
+                            {% set ds = (s.show_date | string).strip() %}
+                            {% if ds|length >= 10 and ds[4] == '-' %}
+                                <div class="sd-day">{{ ds[8:10] | int }}</div>
+                                {% set mon_names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'] %}
+                                <div class="sd-mon">{{ mon_names[ds[5:7] | int - 1] }}</div>
+                                <div class="sd-year">{{ ds[0:4] }}</div>
+                                <div class="sd-wday" data-weekday-src="{{ ds }}"></div>
+                            {% else %}
+                                <div class="sd-day">{{ ds }}</div>
+                            {% endif %}
+                        {% else %}
+                            <div class="sd-day">—</div>
                         {% endif %}
                     </div>
                     <!-- Time -->
                     <div class="show-time">
-                        {% set t = s.show_time %}
-                        {% if t %}
-                            {% set parts = t.__str__().split(':') %}
-                            {% set h = parts[0]|int %}
+                        {% if s.show_time and s.show_time is not none %}
+                            {% set t = s.show_time | string %}
+                            {% set parts = t.split(':') %}
+                            {% set h = parts[0] | int %}
                             {% if h == 0 %}12:{{ parts[1] }} AM
                             {% elif h < 12 %}{{ h }}:{{ parts[1] }} AM
                             {% elif h == 12 %}12:{{ parts[1] }} PM
-                            {% else %}{{ h-12 }}:{{ parts[1] }} PM
+                            {% else %}{{ h - 12 }}:{{ parts[1] }} PM
                             {% endif %}
+                        {% else %}
+                            —
                         {% endif %}
                     </div>
                     <!-- Movie -->
@@ -224,7 +240,11 @@
                 <select name="movie_id" class="form-control" required id="movieSelect">
                     <option value="" disabled selected>Select a movie…</option>
                     {% for m in movies %}
-                    <option value="{{ m.id }}">{{ m.title }}</option>
+                    <option value="{{ m.id }}"
+                        data-release-date="{{ (m.release_date | string).strip()[:10] if m.release_date and m.release_date is not none else '' }}"
+                        data-movie-label="{{ m.title }}">
+                        {{ m.title }}{% if m.release_date and m.release_date is not none %} — releases {{ (m.release_date | string).strip()[5:7] }}/{{ (m.release_date | string).strip()[8:10] }}/{{ (m.release_date | string).strip()[0:4] }}{% endif %}
+                    </option>
                     {% endfor %}
                 </select>
                 {% if not movies %}
@@ -232,32 +252,43 @@
                 {% endif %}
             </div>
 
-            <!-- Dates -->
+            <!-- Dates — auto-filled from movie release date -->
             <div class="form-group">
-                <label class="form-label">Show Date(s) *</label>
+                <label class="form-label">
+                    Show Date(s) *
+                    <span class="auto-date-hint" id="autoDateHint" style="display:none;">✅ Auto-filled from release date</span>
+                </label>
                 <div style="display:flex;gap:8px;margin-bottom:8px;">
                     <input type="date" id="dateInput" class="form-control" style="flex:1;"
-                           min="{{ today }}"
-                           onchange="addDate(this.value); this.value='';">
+                           {% if today %}min="{{ today }}"{% endif %}
+                           onkeydown="if(event.key==='Enter'){event.preventDefault();addDateFromPicker();return false;}"
+                           onchange="addDateFromPicker();">
+                    <button type="button" class="tbl-btn"
+                            style="height:44px;padding:0 16px;background:rgba(206,0,0,.15);border:1px solid #CE0000;color:#ff9999;font-size:12px;white-space:nowrap;"
+                            onclick="addDateFromPicker()">+ Add</button>
                 </div>
                 <div id="dateChips" style="display:flex;flex-wrap:wrap;gap:6px;min-height:24px;"></div>
                 <div id="dateHiddens"></div>
-                <div style="font-size:11px;color:#666;margin-top:4px;">Click the date picker to add multiple dates.</div>
+                <div style="font-size:11px;color:#666;margin-top:4px;">Release date is auto-added when you pick a movie. Use the picker to add extra dates.</div>
             </div>
 
-            <!-- Times -->
+            <!-- Times — admin picks freely -->
             <div class="form-group">
                 <label class="form-label">Show Time(s) *</label>
                 <div class="quick-times" id="quickTimes">
-                    <button type="button" class="qt-btn" onclick="toggleQuickTime('10:00')">10:00 AM</button>
-                    <button type="button" class="qt-btn" onclick="toggleQuickTime('13:30')">1:30 PM</button>
-                    <button type="button" class="qt-btn" onclick="toggleQuickTime('16:30')">4:30 PM</button>
-                    <button type="button" class="qt-btn" onclick="toggleQuickTime('19:00')">7:00 PM</button>
-                    <button type="button" class="qt-btn" onclick="toggleQuickTime('21:30')">9:30 PM</button>
+                    <button type="button" class="qt-btn" data-time="10:00" onclick="toggleQuickTime('10:00')">10:00 AM</button>
+                    <button type="button" class="qt-btn" data-time="13:30" onclick="toggleQuickTime('13:30')">1:30 PM</button>
+                    <button type="button" class="qt-btn" data-time="16:30" onclick="toggleQuickTime('16:30')">4:30 PM</button>
+                    <button type="button" class="qt-btn" data-time="19:00" onclick="toggleQuickTime('19:00')">7:00 PM</button>
+                    <button type="button" class="qt-btn" data-time="21:30" onclick="toggleQuickTime('21:30')">9:30 PM</button>
                 </div>
                 <div style="display:flex;gap:8px;margin-bottom:8px;">
                     <input type="time" id="timeInput" class="form-control" style="flex:1;"
-                           onchange="addTime(this.value); this.value='';">
+                           onkeydown="if(event.key==='Enter'){event.preventDefault();addTimeFromPicker();return false;}"
+                           onchange="addTimeFromPicker();">
+                    <button type="button" class="tbl-btn"
+                            style="height:44px;padding:0 16px;background:rgba(30,100,200,.15);border:1px solid #2266cc;color:#99ccff;font-size:12px;white-space:nowrap;"
+                            onclick="addTimeFromPicker()">+ Add</button>
                 </div>
                 <div id="timeChips" style="display:flex;flex-wrap:wrap;gap:6px;min-height:24px;"></div>
                 <div id="timeHiddens"></div>
@@ -268,9 +299,8 @@
             <div class="summary-box" id="summaryBox"></div>
 
             <div style="background:rgba(255,193,7,.08);border:1px solid #997000;border-radius:8px;padding:12px;font-size:12px;color:#ffd966;line-height:1.6;margin-bottom:16px;">
-                💡 <strong>How it works:</strong> Each date × time combination creates one showing.<br>
-                Seats are automatically generated from this hall's configured seat layout.<br>
-                Users can then book tickets for those showings.
+                💡 <strong>How it works:</strong> Select a movie → release date auto-fills as show date → pick your show times.<br>
+                Each date × time combination creates one showing. Seats are auto-generated from this hall's layout.
             </div>
 
             <div class="modal-footer">
@@ -282,93 +312,170 @@
 </div>
 
 <script>
-const today = '{{ today }}';
-let selectedDates = [];
-let selectedTimes = [];
+// ── Populate weekday names for existing showings ──
+(function(){
+    var wdayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    document.querySelectorAll('[data-weekday-src]').forEach(function(el){
+        var ds = el.getAttribute('data-weekday-src');
+        if(ds && ds.length >= 10){
+            var d = new Date(ds + 'T00:00:00');
+            if(!isNaN(d.getTime())){
+                el.textContent = wdayNames[d.getDay()];
+            }
+        }
+    });
+})();
+
+var selectedDates = [];
+var selectedTimes = [];
 
 // ── MODAL ──────────────────────────────────────────────────
-function openAssignModal() { document.getElementById('assignModal').classList.add('open'); }
-function closeModal()       { document.getElementById('assignModal').classList.remove('open'); }
-document.getElementById('assignModal').addEventListener('click', e => {
+function openAssignModal() {
+    document.getElementById('assignModal').classList.add('open');
+}
+function closeModal() {
+    document.getElementById('assignModal').classList.remove('open');
+    // Reset form state when closing
+    resetFormState();
+}
+document.getElementById('assignModal').addEventListener('click', function(e) {
     if (e.target === document.getElementById('assignModal')) closeModal();
 });
 
+function resetFormState() {
+    selectedDates = [];
+    selectedTimes = [];
+    renderDateChips();
+    renderTimeChips();
+    updateSummary();
+    document.getElementById('autoDateHint').style.display = 'none';
+    // Un-highlight all quick-time buttons
+    document.querySelectorAll('.qt-btn').forEach(function(b){
+        b.classList.remove('selected');
+    });
+}
+
+// ── MOVIE SELECT — auto-fill release date ──────────────────
+document.getElementById('movieSelect').addEventListener('change', function(){
+    var opt = this.options[this.selectedIndex];
+    var releaseDate = opt.getAttribute('data-release-date');
+    var hint = document.getElementById('autoDateHint');
+
+    // Clear existing dates when switching movies
+    selectedDates = [];
+
+    if (releaseDate && releaseDate.length >= 10 && releaseDate[4] === '-') {
+        addDate(releaseDate);
+        hint.style.display = 'inline-flex';
+    } else {
+        hint.style.display = 'none';
+    }
+
+    renderDateChips();
+    updateSummary();
+});
+
 // ── DATES ──────────────────────────────────────────────────
+function addDateFromPicker() {
+    var el = document.getElementById('dateInput');
+    if (el.value) { addDate(el.value); el.value = ''; }
+}
 function addDate(val) {
-    if (!val || selectedDates.includes(val)) return;
+    if (!val || selectedDates.indexOf(val) !== -1) return;
     selectedDates.push(val);
     renderDateChips();
     updateSummary();
 }
 function removeDate(val) {
-    selectedDates = selectedDates.filter(d => d !== val);
+    selectedDates = selectedDates.filter(function(d){ return d !== val; });
+    // Hide auto hint if the release date was removed
+    var sel = document.getElementById('movieSelect');
+    var opt = sel.options[sel.selectedIndex];
+    var rd = opt.getAttribute('data-release-date');
+    if (rd === val) {
+        document.getElementById('autoDateHint').style.display = 'none';
+    }
     renderDateChips();
     updateSummary();
 }
 function renderDateChips() {
-    const chips  = document.getElementById('dateChips');
-    const hidden = document.getElementById('dateHiddens');
+    var chips  = document.getElementById('dateChips');
+    var hidden = document.getElementById('dateHiddens');
     chips.innerHTML  = '';
     hidden.innerHTML = '';
-    selectedDates.sort().forEach(d => {
-        const dt  = new Date(d + 'T00:00:00');
-        const lbl = dt.toLocaleDateString('en-PH', {weekday:'short', month:'short', day:'numeric'});
-        chips.innerHTML  += `<span class="date-chip">${lbl}<button type="button" onclick="removeDate('${d}')">×</button></span>`;
-        hidden.innerHTML += `<input type="hidden" name="show_dates" value="${d}">`;
+    selectedDates.sort().forEach(function(d) {
+        var dt  = new Date(d + 'T00:00:00');
+        var lbl = dt.toLocaleDateString('en-PH', {weekday:'short', month:'short', day:'numeric', year:'numeric'});
+
+        // Check if this is the auto-filled release date
+        var sel = document.getElementById('movieSelect');
+        var opt = sel.options[sel.selectedIndex];
+        var rd = opt.getAttribute('data-release-date');
+        var isAuto = (d === rd);
+        var autoTag = isAuto ? ' <span style="font-size:9px;opacity:.7;">[release]</span>' : '';
+
+        chips.innerHTML  += '<span class="date-chip">' + lbl + autoTag + '<button type="button" onclick="removeDate(\'' + d + '\')">&times;</button></span>';
+        hidden.innerHTML += '<input type="hidden" name="show_dates" value="' + d + '">';
     });
 }
 
 // ── TIMES ──────────────────────────────────────────────────
+function addTimeFromPicker() {
+    var el = document.getElementById('timeInput');
+    if (el.value) { addTime(el.value); el.value = ''; }
+}
 function addTime(val) {
-    if (!val || selectedTimes.includes(val)) return;
+    if (!val || selectedTimes.indexOf(val) !== -1) return;
     selectedTimes.push(val);
+    var btn = document.querySelector('.qt-btn[data-time="' + val + '"]');
+    if (btn) btn.classList.add('selected');
     renderTimeChips();
     updateSummary();
 }
 function removeTime(val) {
-    selectedTimes = selectedTimes.filter(t => t !== val);
-    // un-select quick button
-    document.querySelectorAll('.qt-btn').forEach(b => {
-        if (b.dataset.time === val) b.classList.remove('selected');
-    });
+    selectedTimes = selectedTimes.filter(function(t){ return t !== val; });
+    var btn = document.querySelector('.qt-btn[data-time="' + val + '"]');
+    if (btn) btn.classList.remove('selected');
     renderTimeChips();
     updateSummary();
 }
 function toggleQuickTime(val) {
-    const btn = [...document.querySelectorAll('.qt-btn')].find(b => b.textContent.trim().startsWith(val.split(':')[0]));
-    if (selectedTimes.includes(val)) {
+    if (selectedTimes.indexOf(val) !== -1) {
         removeTime(val);
     } else {
         addTime(val);
-        if (btn) btn.classList.add('selected');
     }
 }
 function formatTime12(t) {
-    const [h,m] = t.split(':').map(Number);
-    const suf = h < 12 ? 'AM' : 'PM';
-    return `${h%12||12}:${String(m).padStart(2,'0')} ${suf}`;
+    var parts = t.split(':');
+    var h = parseInt(parts[0], 10);
+    var m = parts[1];
+    var suf = h < 12 ? 'AM' : 'PM';
+    var h12 = h % 12 || 12;
+    return h12 + ':' + m + ' ' + suf;
 }
 function renderTimeChips() {
-    const chips  = document.getElementById('timeChips');
-    const hidden = document.getElementById('timeHiddens');
+    var chips  = document.getElementById('timeChips');
+    var hidden = document.getElementById('timeHiddens');
     chips.innerHTML  = '';
     hidden.innerHTML = '';
-    selectedTimes.sort().forEach(t => {
-        chips.innerHTML  += `<span class="time-chip">${formatTime12(t)}<button type="button" onclick="removeTime('${t}')">×</button></span>`;
-        hidden.innerHTML += `<input type="hidden" name="show_times" value="${t}">`;
+    selectedTimes.sort().forEach(function(t) {
+        chips.innerHTML  += '<span class="time-chip">' + formatTime12(t) + '<button type="button" onclick="removeTime(\'' + t + '\')">&times;</button></span>';
+        hidden.innerHTML += '<input type="hidden" name="show_times" value="' + t + '">';
     });
 }
 
 // ── SUMMARY ────────────────────────────────────────────────
 function updateSummary() {
-    const box   = document.getElementById('summaryBox');
-    const movie = document.getElementById('movieSelect').options[document.getElementById('movieSelect').selectedIndex]?.text || '';
-    const n     = selectedDates.length * selectedTimes.length;
-    if (n === 0 || !movie || movie === 'Select a movie…') { box.style.display='none'; return; }
+    var box   = document.getElementById('summaryBox');
+    var sel   = document.getElementById('movieSelect');
+    var opt   = sel.options[sel.selectedIndex];
+    var movie = opt ? opt.getAttribute('data-movie-label') || opt.text : '';
+    var n     = selectedDates.length * selectedTimes.length;
+    if (n === 0 || !movie || movie === 'Select a movie…') { box.style.display = 'none'; return; }
     box.style.display = 'block';
-    box.innerHTML = `✅ Will create <strong>${n} showing(s)</strong> of <strong>${movie}</strong> — ${selectedDates.length} date(s) × ${selectedTimes.length} time(s).`;
+    box.innerHTML = '✅ Will create <strong>' + n + ' showing(s)</strong> of <strong>' + movie + '</strong> — ' + selectedDates.length + ' date(s) × ' + selectedTimes.length + ' time(s).';
 }
-document.getElementById('movieSelect').addEventListener('change', updateSummary);
 
 // ── VALIDATION ─────────────────────────────────────────────
 function validateAssign() {

@@ -9,20 +9,20 @@
     <style>
         /* ====== SCREEN ====== */
         .screen-wrap {
-            text-align: center;
-            margin: 0 auto 28px;
+            width: 100%;
+            margin-bottom: 20px;
         }
         .screen-label {
             font-size: 11px; font-weight: 700; color: #888;
             text-transform: uppercase; letter-spacing: 2px;
             margin-bottom: 8px;
+            text-align: center;
         }
         .screen-bar {
             height: 10px;
             background: linear-gradient(90deg, transparent, #CE0000 20%, #ff4444 50%, #CE0000 80%, transparent);
             border-radius: 50%;
-            max-width: 560px;
-            margin: 0 auto;
+            width: 100%;
             box-shadow: 0 4px 20px rgba(204,0,0,0.5);
         }
 
@@ -30,6 +30,15 @@
         .seat-editor-wrap {
             overflow-x: auto;
             padding-bottom: 16px;
+            /* Center the inner grid block when it's narrower than the panel */
+            display: flex;
+            justify-content: center;
+        }
+        /* Inner block that holds screen + headers + grid together */
+        .seat-editor-inner {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: flex-start;
         }
         .seat-grid {
             display: inline-flex;
@@ -271,64 +280,68 @@
                 </div>
             </div>
             <div class="panel-body" style="background:rgba(0,0,0,0.3);">
-                <!-- SCREEN INDICATOR -->
-                <div class="screen-wrap">
-                    <div class="screen-label">🎬 SCREEN / STAGE</div>
-                    <div class="screen-bar"></div>
-                </div>
-
-                <!-- COL HEADER -->
+                <!-- SEAT GRID + SCREEN (centered together) -->
                 <div class="seat-editor-wrap">
-                    <div class="col-header-row">
-                        {% for col in col_numbers %}
-                        <div class="col-header">{{ col }}</div>
-                        {% endfor %}
-                    </div>
+                    <div class="seat-editor-inner">
 
-                    <!-- SEAT GRID -->
-                    <div class="seat-grid" id="seatGrid">
-                        {% for row in row_labels %}
-                        <div class="seat-row">
-                            <div class="row-label">{{ row }}</div>
+                        <!-- SCREEN INDICATOR (now inside inner block, spans grid width) -->
+                        <div class="screen-wrap" style="padding-left:34px;">
+                            <div class="screen-label">🎬 SCREEN / STAGE</div>
+                            <div class="screen-bar"></div>
+                        </div>
+
+                        <div class="col-header-row">
                             {% for col in col_numbers %}
-                            {% set key = row ~ '-' ~ col %}
-                            {% set seat = seat_map.get(key) %}
-                            {% if seat %}
-                                {% if not seat.is_active %}
-                                    {% set sclass = 'seat-inactive' %}
-                                    {% set stype  = 'Inactive' %}
-                                    {% set slabel = '✕' %}
-                                {% elif seat.seat_type == 'VIP' %}
-                                    {% set sclass = 'seat-vip' %}
-                                    {% set stype  = 'VIP' %}
-                                    {% set slabel = 'VIP' %}
-                                {% elif seat.seat_type == 'PWD' %}
-                                    {% set sclass = 'seat-pwd' %}
-                                    {% set stype  = 'PWD' %}
-                                    {% set slabel = 'PWD' %}
+                            <div class="col-header">{{ col }}</div>
+                            {% endfor %}
+                        </div>
+
+                        <!-- SEAT GRID -->
+                        <div class="seat-grid" id="seatGrid">
+                            {% for row in row_labels %}
+                            <div class="seat-row">
+                                <div class="row-label">{{ row }}</div>
+                                {% for col in col_numbers %}
+                                {% set key = row ~ '-' ~ col %}
+                                {% set seat = seat_map.get(key) %}
+                                {% if seat %}
+                                    {% if not seat.is_active %}
+                                        {% set sclass = 'seat-inactive' %}
+                                        {% set stype  = 'Inactive' %}
+                                        {% set slabel = '✕' %}
+                                    {% elif seat.seat_type == 'VIP' %}
+                                        {% set sclass = 'seat-vip' %}
+                                        {% set stype  = 'VIP' %}
+                                        {% set slabel = 'VIP' %}
+                                    {% elif seat.seat_type == 'PWD' %}
+                                        {% set sclass = 'seat-pwd' %}
+                                        {% set stype  = 'PWD' %}
+                                        {% set slabel = 'PWD' %}
+                                    {% else %}
+                                        {% set sclass = 'seat-regular' %}
+                                        {% set stype  = 'Regular' %}
+                                        {% set slabel = '' %}
+                                    {% endif %}
                                 {% else %}
                                     {% set sclass = 'seat-regular' %}
                                     {% set stype  = 'Regular' %}
                                     {% set slabel = '' %}
                                 {% endif %}
-                            {% else %}
-                                {% set sclass = 'seat-regular' %}
-                                {% set stype  = 'Regular' %}
-                                {% set slabel = '' %}
-                            {% endif %}
-                            <div class="seat-cell {{ sclass }}"
-                                 data-row="{{ row }}"
-                                 data-col="{{ col }}"
-                                 data-code="{{ row }}{{ col }}"
-                                 data-type="{{ stype }}"
-                                 title="{{ row }}{{ col }} — {{ stype }}"
-                                 onmousedown="startPaint(this)"
-                                 onmouseover="continuePaint(this)">{{ slabel }}</div>
+                                <div class="seat-cell {{ sclass }}"
+                                     data-row="{{ row }}"
+                                     data-col="{{ col }}"
+                                     data-code="{{ row }}{{ col }}"
+                                     data-type="{{ stype }}"
+                                     title="{{ row }}{{ col }} — {{ stype }}"
+                                     onmousedown="startPaint(this)"
+                                     onmouseover="continuePaint(this)">{{ slabel }}</div>
+                                {% endfor %}
+                            </div>
                             {% endfor %}
                         </div>
-                        {% endfor %}
-                    </div>
-                </div>
+
+                    </div><!-- /seat-editor-inner -->
+                </div><!-- /seat-editor-wrap -->
             </div>
         </div>
 
