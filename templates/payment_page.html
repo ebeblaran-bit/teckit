@@ -3,411 +3,383 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TICK.IT — Secure Payment</title>
+    <title>TICK.IT — Payment</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='booking.css') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
-        .pay-page{min-height:calc(100vh - 70px);display:flex;align-items:flex-start;justify-content:center;padding:32px 20px 60px;gap:28px;flex-wrap:wrap;}
-        .progress-strip{background:#111;border-bottom:1px solid #200000;padding:12px 32px;display:flex;justify-content:center;}
-        .progress-steps{display:flex;align-items:center;}
-        .p-step{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:#555;}
-        .p-step.done{color:#4caf50;}.p-step.active{color:#CE0000;}
-        .p-dot{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;background:#333;color:#555;border:2px solid #444;}
-        .p-step.done .p-dot{background:rgba(76,175,80,.2);border-color:#4caf50;color:#4caf50;}
-        .p-step.active .p-dot{background:rgba(206,0,0,.2);border-color:#CE0000;color:#CE0000;}
-        .p-line{width:48px;height:2px;background:#333;margin:0 4px;flex-shrink:0;}.p-line.done{background:#4caf50;}
-        .summary-card{width:300px;flex-shrink:0;background:#0d0000;border:1px solid #300000;border-radius:18px;overflow:hidden;}
-        .summary-poster{width:100%;height:155px;object-fit:cover;object-position:center top;display:block;}
-        .summary-body{padding:18px;}
-        .summary-movie{font-size:16px;font-weight:900;color:#fff;margin-bottom:12px;line-height:1.2;}
-        .summary-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #1a0000;font-size:12px;}
-        .summary-row:last-child{border-bottom:none;}
-        .s-label{color:#666;font-weight:600;}.s-value{color:#fff;font-weight:700;text-align:right;max-width:165px;font-size:12px;}
-        .summary-total{margin-top:12px;padding:12px;background:rgba(206,0,0,.1);border:1px solid #300000;border-radius:8px;display:flex;justify-content:space-between;align-items:center;}
-        .total-label{font-size:12px;font-weight:700;color:#aaa;}.total-amount{font-size:22px;font-weight:900;color:#fff;}
-        .reservation-timer{display:flex;align-items:center;gap:8px;padding:9px 12px;margin-top:10px;background:rgba(255,170,0,.08);border:1px solid #997000;border-radius:8px;font-size:12px;color:#ffd966;}
-        .timer-icon{animation:pulse 1s infinite;}
-        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+        .pay-wrap{min-height:calc(100vh - 70px);display:flex;align-items:flex-start;justify-content:center;padding:32px 20px 60px;gap:28px;flex-wrap:wrap;}
+        /* Progress */
+        .prog-bar{background:#111;border-bottom:1px solid #200000;padding:12px;display:flex;justify-content:center;}
+        .prog-steps{display:flex;align-items:center;gap:0;}
+        .ps{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:#555;}
+        .ps.done{color:#4caf50;} .ps.active{color:#CE0000;}
+        .ps-dot{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;background:#222;border:2px solid #444;color:#555;}
+        .ps.done .ps-dot{background:rgba(76,175,80,.2);border-color:#4caf50;color:#4caf50;}
+        .ps.active .ps-dot{background:rgba(206,0,0,.2);border-color:#CE0000;color:#CE0000;}
+        .ps-line{width:44px;height:2px;background:#333;margin:0 4px;} .ps-line.done{background:#4caf50;}
+        /* Summary */
+        .summary-card{width:295px;flex-shrink:0;background:#0d0000;border:1px solid #300000;border-radius:16px;overflow:hidden;}
+        .sum-poster{width:100%;height:150px;object-fit:cover;object-position:center top;display:block;}
+        .sum-body{padding:16px;}
+        .sum-movie{font-size:15px;font-weight:900;color:#fff;margin-bottom:12px;line-height:1.2;}
+        .sum-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #1a0000;font-size:12px;}
+        .sum-row:last-child{border-bottom:none;}
+        .sum-lbl{color:#666;font-weight:600;} .sum-val{color:#fff;font-weight:700;text-align:right;max-width:160px;}
+        .sum-total{margin-top:12px;padding:12px;background:rgba(206,0,0,.1);border:1px solid #300000;border-radius:8px;display:flex;justify-content:space-between;align-items:center;}
+        .tot-lbl{font-size:11px;font-weight:700;color:#aaa;} .tot-amt{font-size:22px;font-weight:900;color:#fff;}
+        .timer-row{display:flex;align-items:center;gap:8px;padding:9px 12px;margin-top:10px;background:rgba(255,170,0,.08);border:1px solid #997000;border-radius:8px;font-size:12px;color:#ffd966;}
+        .ti{animation:pulse 1s infinite;} @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
         #countdown{font-weight:900;font-size:13px;color:#ff8c00;}
-        .payment-card{flex:1;min-width:320px;max-width:520px;background:#0d0000;border:1px solid #300000;border-radius:18px;overflow:hidden;}
-        .payment-header{padding:18px 24px 14px;border-bottom:1px solid #200000;background:rgba(206,0,0,.06);}
-        .payment-title{font-size:18px;font-weight:900;color:#fff;margin-bottom:4px;}
-        .payment-sub{font-size:12px;color:#666;}
-        .payment-body{padding:22px 24px;}
-        .method-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:22px;}
-        .method-tab{height:58px;border:2px solid #2a0000;border-radius:10px;background:none;cursor:pointer;transition:all .2s;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-family:'Inter',sans-serif;padding:6px 4px;}
-        .method-tab:hover{border-color:#CE0000;background:rgba(206,0,0,.06);}
-        .method-tab.active{border-color:#CE0000;background:rgba(206,0,0,.14);}
-        .method-icon{font-size:20px;}.method-label{font-size:10px;font-weight:800;color:#fff;letter-spacing:.3px;text-align:center;}
-        .method-badge{font-size:9px;color:#4caf50;font-weight:700;}
-        .pf-group{margin-bottom:14px;}
-        .pf-label{display:block;font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;}
-        .pf-input{width:100%;height:44px;padding:0 14px;background:rgba(0,0,0,.6);border:2px solid #2a0000;border-radius:8px;color:#fff;font-size:14px;font-family:'Inter',sans-serif;outline:none;transition:border-color .2s;}
-        .pf-input:focus{border-color:#CE0000;}.pf-input::placeholder{color:#444;}
-        .pf-row{display:flex;gap:12px;}.pf-row .pf-group{flex:1;}
-        .qr-panel{text-align:center;padding:10px 0;}
-        .qr-steps{text-align:left;margin-bottom:16px;font-size:12px;color:#aaa;line-height:1.8;}
-        .qr-step-row{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;}
-        .qr-step-num{width:20px;height:20px;background:#CE0000;border-radius:50%;color:#fff;font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
-        #qr-box{display:flex;align-items:center;justify-content:center;padding:16px;background:#fff;border-radius:12px;width:fit-content;margin:0 auto 14px;min-height:160px;}
-        .qr-loading{display:flex;flex-direction:column;align-items:center;gap:10px;color:#999;font-size:12px;}
-        .qr-spinner{width:28px;height:28px;border:3px solid #ddd;border-top-color:#CE0000;border-radius:50%;animation:spin .7s linear infinite;}
-        @keyframes spin{to{transform:rotate(360deg)}}
-        .qr-amount{font-size:18px;font-weight:900;color:#fff;margin-bottom:4px;}
-        .qr-ref{font-size:11px;color:#666;margin-bottom:12px;font-family:monospace;}
-        .qr-status-bar{font-size:12px;color:#ffd966;padding:8px 14px;background:rgba(255,170,0,.08);border:1px solid #997000;border-radius:6px;margin-bottom:10px;display:none;}
-        .qr-manual{font-size:11px;color:#555;margin-top:8px;display:none;}
-        .qr-manual a{color:#CE0000;}
-        .pay-btn{width:100%;height:50px;margin-top:8px;background:#CE0000;border:none;border-radius:10px;color:#fff;font-weight:900;font-size:15px;cursor:pointer;transition:background .2s,transform .1s;display:flex;align-items:center;justify-content:center;gap:10px;font-family:'Inter',sans-serif;}
-        .pay-btn:hover:not(:disabled){background:#ff0000;}
-        .pay-btn:disabled{opacity:.55;cursor:not-allowed;}
+        /* Payment card */
+        .pay-card{flex:1;min-width:310px;max-width:500px;background:#0d0000;border:1px solid #300000;border-radius:16px;overflow:hidden;}
+        .pay-hd{padding:18px 22px 14px;border-bottom:1px solid #200000;background:rgba(206,0,0,.06);}
+        .pay-title{font-size:18px;font-weight:900;color:#fff;margin-bottom:3px;}
+        .pay-sub{font-size:12px;color:#666;}
+        .pay-body{padding:22px;}
+        /* Method tabs */
+        .mtabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:20px;}
+        .mtab{height:56px;border:2px solid #2a0000;border-radius:10px;background:none;cursor:pointer;transition:all .15s;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-family:'Inter',sans-serif;}
+        .mtab:hover{border-color:#CE0000;background:rgba(206,0,0,.06);}
+        .mtab.active{border-color:#CE0000;background:rgba(206,0,0,.14);}
+        .mi{font-size:18px;} .ml{font-size:10px;font-weight:800;color:#fff;} .mb{font-size:9px;color:#888;}
+        /* Forms */
+        .fg{margin-bottom:14px;}
+        .fl{display:block;font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;}
+        .fi{width:100%;height:44px;padding:0 13px;background:rgba(0,0,0,.6);border:2px solid #2a0000;border-radius:8px;color:#fff;font-size:14px;font-family:'Inter',sans-serif;outline:none;transition:border-color .2s;}
+        .fi:focus{border-color:#CE0000;} .fi::placeholder{color:#444;}
+        .fr{display:flex;gap:10px;} .fr .fg{flex:1;}
+        .notice{padding:10px 13px;border-radius:8px;font-size:12px;margin-bottom:14px;line-height:1.5;}
+        .notice-green{background:rgba(76,175,80,.08);border:1px solid #2a5c2a;color:#7fff7f;}
+        .notice-purple{background:rgba(100,0,200,.1);border:1px solid #5500aa;color:#cc88ff;}
+        .notice-blue{background:rgba(0,80,180,.08);border:1px solid #222;color:#666;}
+        /* GCash */
+        .gcash-steps{text-align:left;margin-bottom:14px;}
+        .gcash-step{display:flex;align-items:flex-start;gap:9px;margin-bottom:8px;font-size:12px;color:#aaa;}
+        .gsn{width:20px;height:20px;background:#CE0000;border-radius:50%;color:#fff;font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+        .gcash-info{background:rgba(0,180,0,.08);border:1px solid #1a5c1a;border-radius:8px;padding:14px;text-align:center;margin-bottom:14px;}
+        .gcash-num{font-size:28px;font-weight:900;color:#fff;letter-spacing:2px;font-family:monospace;}
+        .gcash-label{font-size:11px;color:#666;margin-top:4px;}
+        .gcash-amount{font-size:18px;font-weight:900;color:#4caf50;margin-top:8px;}
+        /* Pay button */
+        .pay-btn{width:100%;height:50px;margin-top:6px;background:#CE0000;border:none;border-radius:10px;color:#fff;font-weight:900;font-size:15px;cursor:pointer;transition:background .2s,transform .1s;display:flex;align-items:center;justify-content:center;gap:10px;font-family:'Inter',sans-serif;}
+        .pay-btn:hover:not(:disabled){background:#ff0000;} .pay-btn:disabled{opacity:.55;cursor:not-allowed;}
         .spinner{width:18px;height:18px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;}
-        .result-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;align-items:center;justify-content:center;padding:20px;}
-        .result-overlay.show{display:flex;}
-        .result-box{background:#110000;border:2px solid #300000;border-radius:20px;padding:40px 36px;max-width:420px;width:100%;text-align:center;animation:popIn .3s ease;}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        #pay-error{display:none;background:rgba(204,0,0,.15);border:1px solid #cc0000;border-radius:8px;padding:10px 13px;font-size:12px;color:#ff9999;margin-bottom:12px;}
+        /* Result overlay */
+        .result-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;align-items:center;justify-content:center;padding:20px;}
+        .result-ov.show{display:flex;}
+        .result-box{background:#110000;border:2px solid #300000;border-radius:20px;padding:38px 32px;max-width:400px;width:100%;text-align:center;animation:popIn .3s ease;}
         @keyframes popIn{from{transform:scale(.85);opacity:0}to{transform:scale(1);opacity:1}}
-        .result-icon{font-size:68px;margin-bottom:14px;}
-        .result-title{font-size:22px;font-weight:900;color:#fff;margin-bottom:6px;}
-        .result-msg{font-size:13px;color:#aaa;line-height:1.6;margin-bottom:18px;}
-        .result-pay-id{font-size:10px;color:#555;margin-bottom:20px;font-family:monospace;word-break:break-all;}
-        .result-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
-        .r-btn-outline{padding:10px 20px;border:2px solid #CE0000;border-radius:8px;color:#CE0000;text-decoration:none;font-weight:700;font-size:13px;}
-        .r-btn-outline:hover{background:#CE0000;color:#fff;}
-        .r-btn-red{padding:10px 20px;background:#CE0000;border:none;border-radius:8px;color:#fff;text-decoration:none;font-weight:700;font-size:13px;cursor:pointer;}
-        .r-btn-red:hover{background:#ff0000;}
-        #pay-error{display:none;background:rgba(204,0,0,.15);border:1px solid #cc0000;border-radius:8px;padding:10px 14px;font-size:13px;color:#ff9999;margin-bottom:12px;}
-        .powered-by{text-align:center;font-size:11px;color:#333;margin-top:12px;}
-        .sec-notice{background:rgba(0,80,180,.06);border:1px solid #222;border-radius:8px;padding:10px 14px;font-size:11px;color:#666;margin-bottom:14px;line-height:1.6;}
-        .maya-notice{background:rgba(100,0,200,.08);border:1px solid #5500aa;border-radius:10px;padding:16px;margin-bottom:16px;}
+        .ri{font-size:64px;margin-bottom:12px;} .rt{font-size:21px;font-weight:900;color:#fff;margin-bottom:6px;}
+        .rm{font-size:13px;color:#aaa;line-height:1.6;margin-bottom:16px;} .rpid{font-size:10px;color:#555;margin-bottom:18px;font-family:monospace;}
+        .ra{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+        .rb-o{padding:10px 18px;border:2px solid #CE0000;border-radius:8px;color:#CE0000;text-decoration:none;font-weight:700;font-size:13px;}
+        .rb-o:hover{background:#CE0000;color:#fff;}
+        .rb-r{padding:10px 18px;background:#CE0000;border:none;border-radius:8px;color:#fff;text-decoration:none;font-weight:700;font-size:13px;cursor:pointer;}
+        .rb-r:hover{background:#ff0000;}
+        .demo-note{background:rgba(255,170,0,.08);border:1px solid #665500;border-radius:8px;padding:10px 13px;font-size:11px;color:#cc9900;margin-bottom:16px;text-align:center;}
     </style>
 </head>
 <body>
 <nav class="navbar" style="position:relative;">
-    <div style="display:flex;align-items:center;flex-shrink:0;">
-        <div class="logo" style="font-size:1.25rem;letter-spacing:2px;">TICK.<span>IT</span></div>
-    </div>
+    <div class="logo" style="font-size:1.25rem;letter-spacing:2px;flex-shrink:0;">TICK.<span>IT</span></div>
     <div style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;">
-        <a href="/movies" class="nav-btn">Movies</a>
-        <a href="/home"   class="nav-btn">Home</a>
+        <a href="/movies"  class="nav-btn">Movies</a>
+        <a href="/home"    class="nav-btn">Home</a>
         <a href="/booking" class="nav-btn">Booking</a>
     </div>
     <div class="search-wrap"><a href="/logout" class="logout-btn">Logout</a></div>
 </nav>
-<div class="progress-strip">
-    <div class="progress-steps">
-        <div class="p-step done"><div class="p-dot">✓</div><span>Seats</span></div>
-        <div class="p-line done"></div>
-        <div class="p-step done"><div class="p-dot">✓</div><span>Details</span></div>
-        <div class="p-line done"></div>
-        <div class="p-step active"><div class="p-dot">3</div><span>Payment</span></div>
-        <div class="p-line"></div>
-        <div class="p-step"><div class="p-dot">4</div><span>Confirm</span></div>
+
+<div class="prog-bar">
+    <div class="prog-steps">
+        <div class="ps done"><div class="ps-dot">✓</div><span>Seats</span></div>
+        <div class="ps-line done"></div>
+        <div class="ps done"><div class="ps-dot">✓</div><span>Details</span></div>
+        <div class="ps-line done"></div>
+        <div class="ps active"><div class="ps-dot">3</div><span>Payment</span></div>
+        <div class="ps-line"></div>
+        <div class="ps"><div class="ps-dot">4</div><span>Confirm</span></div>
     </div>
 </div>
-<div class="pay-page">
+
+<div class="pay-wrap">
+
+    <!-- BOOKING SUMMARY -->
     <div class="summary-card">
         {% if booking.poster_path %}
-        <img src="{{ url_for('static', filename=booking.poster_path) }}" alt="{{ booking.movie }}" class="summary-poster" onerror="this.style.display='none'">
+        <img src="{{ url_for('static', filename=booking.poster_path) }}" alt="{{ booking.movie }}" class="sum-poster" onerror="this.style.display='none'">
         {% endif %}
-        <div class="summary-body">
-            <div class="summary-movie">{{ booking.movie }}</div>
-            <div class="summary-row"><span class="s-label">📍 Cinema</span><span class="s-value">{{ booking.cinema }}</span></div>
-            <div class="summary-row"><span class="s-label">📅 Date</span><span class="s-value">{{ booking.date_fmt }}</span></div>
-            <div class="summary-row"><span class="s-label">🕐 Time</span><span class="s-value">{{ booking.time_fmt }}</span></div>
-            <div class="summary-row"><span class="s-label">💺 Seats</span><span class="s-value">{{ booking.seat_codes }}</span></div>
-            <div class="summary-row"><span class="s-label">🎫 Type</span><span class="s-value">{{ booking.ticket_type }}</span></div>
-            <div class="summary-row"><span class="s-label">🎟️ Count</span><span class="s-value">{{ booking.ticket_count }} ticket(s)</span></div>
-            <div class="summary-total">
-                <div class="total-label">TOTAL DUE</div>
-                <div class="total-amount">₱{{ "{:,.0f}".format(booking.total_price) }}</div>
+        <div class="sum-body">
+            <div class="sum-movie">{{ booking.movie }}</div>
+            <div class="sum-row"><span class="sum-lbl">📍 Cinema</span><span class="sum-val">{{ booking.cinema }}</span></div>
+            <div class="sum-row"><span class="sum-lbl">📅 Date</span><span class="sum-val">{{ booking.date_fmt }}</span></div>
+            <div class="sum-row"><span class="sum-lbl">🕐 Time</span><span class="sum-val">{{ booking.time_fmt }}</span></div>
+            <div class="sum-row"><span class="sum-lbl">💺 Seats</span><span class="sum-val">{{ booking.seat_codes }}</span></div>
+            <div class="sum-row"><span class="sum-lbl">🎫 Type</span><span class="sum-val">{{ booking.ticket_type }}</span></div>
+            <div class="sum-row"><span class="sum-lbl">🎟️ Count</span><span class="sum-val">{{ booking.ticket_count }} ticket(s)</span></div>
+            <div class="sum-total">
+                <div class="tot-lbl">TOTAL DUE</div>
+                <div class="tot-amt">₱{{ "{:,.0f}".format(booking.total_price) }}</div>
             </div>
-            <div class="reservation-timer">
-                <span class="timer-icon">⏰</span>
+            <div class="timer-row">
+                <span class="ti">⏰</span>
                 <span>Reserved: <span id="countdown">--:--</span></span>
             </div>
         </div>
     </div>
-    <div class="payment-card">
-        <div class="payment-header">
-            <div class="payment-title">💳 Secure Payment</div>
-            <div class="payment-sub">Powered by PayMongo · Encrypted &amp; Secure</div>
+
+    <!-- PAYMENT -->
+    <div class="pay-card">
+        <div class="pay-hd">
+            <div class="pay-title">💳 Complete Payment</div>
+            <div class="pay-sub">Select payment method and confirm</div>
         </div>
-        <div class="payment-body">
-            <div class="method-tabs">
-                <button class="method-tab active" id="tab-gcash" onclick="switchMethod('gcash')">
-                    <span class="method-icon">📱</span><span class="method-label">GCash</span><span class="method-badge">QR Code</span>
+        <div class="pay-body">
+
+            {% if use_paymongo %}
+            <div class="demo-note" style="background:rgba(76,175,80,.08);border:1px solid #2a5c2a;color:#7fff7f;">
+                🔒 <strong>Secure Payment via PayMongo (Test Mode)</strong><br>
+                You will be redirected to PayMongo's secure checkout.
+            </div>
+            {% else %}
+            <div class="demo-note">
+                🖥️ <strong>Simulation Mode</strong> — PayMongo keys not configured. Payments are simulated.
+                <br><small>Set <code>PAYMONGO_SECRET_KEY</code> env var to enable real test payments.</small>
+            </div>
+            {% endif %}
+
+            <!-- Method Tabs -->
+            <div class="mtabs">
+                <button class="mtab active" id="tab-gcash"       onclick="sw('gcash')">
+                    <span class="mi">📱</span><span class="ml">GCash</span><span class="mb">Mobile</span>
                 </button>
-                <button class="method-tab" id="tab-paymaya" onclick="switchMethod('paymaya')">
-                    <span class="method-icon">💜</span><span class="method-label">Maya</span><span class="method-badge">e-Wallet</span>
+                <button class="mtab"        id="tab-maya"        onclick="sw('maya')">
+                    <span class="mi">💜</span><span class="ml">Maya</span><span class="mb">e-Wallet</span>
                 </button>
-                <button class="method-tab" id="tab-credit_card" onclick="switchMethod('credit_card')">
-                    <span class="method-icon">💳</span><span class="method-label">Credit Card</span><span class="method-badge">Visa/MC</span>
+                <button class="mtab"        id="tab-credit_card" onclick="sw('credit_card')">
+                    <span class="mi">💳</span><span class="ml">Credit</span><span class="mb">Visa/MC</span>
                 </button>
-                <button class="method-tab" id="tab-debit_card" onclick="switchMethod('debit_card')">
-                    <span class="method-icon">🏦</span><span class="method-label">Debit Card</span><span class="method-badge">Visa/MC</span>
+                <button class="mtab"        id="tab-debit_card"  onclick="sw('debit_card')">
+                    <span class="mi">🏦</span><span class="ml">Debit</span><span class="mb">Visa/MC</span>
                 </button>
             </div>
 
             <!-- GCash -->
             <div id="form-gcash">
-                <div class="qr-steps">
-                    <div class="qr-step-row"><div class="qr-step-num">1</div><span>Click "Generate GCash QR" below</span></div>
-                    <div class="qr-step-row"><div class="qr-step-num">2</div><span>Open <strong>GCash</strong> → tap <strong>Pay QR</strong> → scan the code</span></div>
-                    <div class="qr-step-row"><div class="qr-step-num">3</div><span>Confirm ₱{{ "{:,.0f}".format(booking.total_price) }} in GCash app</span></div>
-                    <div class="qr-step-row"><div class="qr-step-num">4</div><span>This page updates automatically ✅</span></div>
+                <div class="gcash-steps">
+                    <div class="gcash-step"><div class="gsn">1</div><span>Open GCash app → tap <strong>Send Money</strong></span></div>
+                    <div class="gcash-step"><div class="gsn">2</div><span>Send to the number below, enter the exact amount</span></div>
+                    <div class="gcash-step"><div class="gsn">3</div><span>Enter your GCash number below and click <strong>Confirm</strong></span></div>
                 </div>
-                <div class="qr-panel">
-                    <div id="qr-box"><div class="qr-loading"><span style="font-size:36px">📱</span><span>Tap below to generate QR</span></div></div>
-                    <div class="qr-amount" style="margin-top:14px;">₱{{ "{:,.0f}".format(booking.total_price) }}</div>
-                    <div class="qr-ref">Ref: {{ booking.ref_code }}</div>
-                    <div class="qr-status-bar" id="gcash-status">⏳ Waiting for GCash payment confirmation…</div>
-                    <div class="qr-manual" id="gcash-manual">Can't scan? <a id="gcash-link" href="#" target="_blank">Open GCash payment page →</a></div>
+                <div class="gcash-info">
+                    <div class="gcash-label">Send GCash payment to:</div>
+                    <div class="gcash-num">0975-078-8092</div>
+                    <div class="gcash-label">Account Name: TICK.IT Cinema</div>
+                    <div class="gcash-amount">₱{{ "{:,.0f}".format(booking.total_price) }}</div>
+                    <div class="gcash-label" style="margin-top:4px;">Reference: {{ booking.ref_code }}</div>
                 </div>
-                <button class="pay-btn" id="gcashBtn" onclick="initGCash()">
-                    <span id="gcashLabel">📱 Generate GCash QR Code</span>
+                <div class="fg">
+                    <label class="fl">Your GCash Number (for confirmation)</label>
+                    <input type="tel" class="fi" id="gcash-num" placeholder="09XX XXX XXXX" maxlength="11">
+                </div>
+                <div class="notice notice-green">
+                    ✅ After sending, click Confirm below. Staff will verify your GCash payment at the cinema.
+                </div>
+                <button class="pay-btn" onclick="doPayment('gcash')">
+                    <span id="gcash-lbl">📱 Confirm GCash Payment</span>
                 </button>
             </div>
 
             <!-- Maya -->
-            <div id="form-paymaya" style="display:none;">
-                <div class="maya-notice">
-                    <div style="font-size:14px;font-weight:700;color:#cc88ff;margin-bottom:6px;">💜 Pay with Maya</div>
-                    <div style="font-size:12px;color:#aaa;line-height:1.6;">You'll be redirected to Maya to complete your ₱{{ "{:,.0f}".format(booking.total_price) }} payment securely. Return here after — your booking confirms automatically.</div>
+            <div id="form-maya" style="display:none;">
+                <div class="notice notice-purple" style="margin-bottom:16px;">
+                    💜 <strong>Maya / PayMaya</strong><br>
+                    Send ₱{{ "{:,.0f}".format(booking.total_price) }} via Maya to <strong>0975-078-8092</strong><br>
+                    Account: TICK.IT Cinema · Ref: {{ booking.ref_code }}
                 </div>
-                <div class="pf-group">
-                    <label class="pf-label">Maya Mobile (optional)</label>
-                    <input type="tel" class="pf-input" id="maya-number" placeholder="09XX XXX XXXX">
+                <div class="fg">
+                    <label class="fl">Your Maya Number</label>
+                    <input type="tel" class="fi" id="maya-num" placeholder="09XX XXX XXXX" maxlength="11">
                 </div>
-                <button class="pay-btn" id="mayaBtn" onclick="initMaya()">
-                    <span id="mayaLabel">💜 Continue to Maya →</span>
+                <div class="notice notice-green">✅ Staff will verify your Maya payment at the cinema.</div>
+                <button class="pay-btn" onclick="doPayment('maya')">
+                    <span id="maya-lbl">💜 Confirm Maya Payment</span>
                 </button>
             </div>
 
             <!-- Credit Card -->
             <div id="form-credit_card" style="display:none;">
-                <div class="sec-notice">🔒 Card details processed securely via PayMongo. TICK.IT never stores your card information.</div>
-                <div class="pf-group">
-                    <label class="pf-label">Card Number <span id="card-brand" style="font-size:12px;color:#aaa;font-weight:400;"></span></label>
-                    <input type="text" class="pf-input" id="card-number" placeholder="1234 5678 9012 3456" maxlength="19" oninput="formatCard(this,'card-brand')">
+                <div class="notice notice-blue">🖥️ Demo mode: enter any card details to simulate payment.</div>
+                <div class="fg">
+                    <label class="fl">Card Number <span id="cc-brand" style="font-size:12px;color:#aaa;font-weight:400;"></span></label>
+                    <input type="text" class="fi" id="cc-num" placeholder="1234 5678 9012 3456" maxlength="19" oninput="fmtCard(this,'cc-brand')">
                 </div>
-                <div class="pf-row">
-                    <div class="pf-group"><label class="pf-label">Expiry (MM/YY)</label><input type="text" class="pf-input" id="card-expiry" placeholder="MM / YY" maxlength="7" oninput="formatExpiry(this)"></div>
-                    <div class="pf-group"><label class="pf-label">CVV</label><input type="password" class="pf-input" id="card-cvv" placeholder="•••" maxlength="4"></div>
+                <div class="fr">
+                    <div class="fg"><label class="fl">Expiry (MM/YY)</label><input type="text" class="fi" id="cc-exp" placeholder="MM / YY" maxlength="7" oninput="fmtExp(this)"></div>
+                    <div class="fg"><label class="fl">CVV</label><input type="password" class="fi" id="cc-cvv" placeholder="•••" maxlength="4"></div>
                 </div>
-                <div class="pf-group"><label class="pf-label">Cardholder Name</label><input type="text" class="pf-input" id="card-name" placeholder="Name as on card"></div>
-                <button class="pay-btn" id="cardBtn" onclick="processCard('credit')">
-                    <span id="cardLabel">💳 Pay ₱{{ "{:,.0f}".format(booking.total_price) }}</span>
+                <div class="fg"><label class="fl">Cardholder Name</label><input type="text" class="fi" id="cc-name" placeholder="Name on card"></div>
+                <button class="pay-btn" onclick="doPayment('credit_card')">
+                    <span id="cc-lbl">💳 Pay ₱{{ "{:,.0f}".format(booking.total_price) }}</span>
                 </button>
             </div>
 
             <!-- Debit Card -->
             <div id="form-debit_card" style="display:none;">
-                <div class="sec-notice">🔒 Secured via PayMongo.</div>
-                <div class="pf-group">
-                    <label class="pf-label">Card Number <span id="debit-brand" style="font-size:12px;color:#aaa;font-weight:400;"></span></label>
-                    <input type="text" class="pf-input" id="debit-number" placeholder="1234 5678 9012 3456" maxlength="19" oninput="formatCard(this,'debit-brand')">
+                <div class="notice notice-blue">🖥️ Demo mode: enter any card details to simulate payment.</div>
+                <div class="fg">
+                    <label class="fl">Card Number <span id="dc-brand" style="font-size:12px;color:#aaa;font-weight:400;"></span></label>
+                    <input type="text" class="fi" id="dc-num" placeholder="1234 5678 9012 3456" maxlength="19" oninput="fmtCard(this,'dc-brand')">
                 </div>
-                <div class="pf-row">
-                    <div class="pf-group"><label class="pf-label">Expiry (MM/YY)</label><input type="text" class="pf-input" id="debit-expiry" placeholder="MM / YY" maxlength="7" oninput="formatExpiry(this)"></div>
-                    <div class="pf-group"><label class="pf-label">CVV</label><input type="password" class="pf-input" id="debit-cvv" placeholder="•••" maxlength="4"></div>
+                <div class="fr">
+                    <div class="fg"><label class="fl">Expiry (MM/YY)</label><input type="text" class="fi" id="dc-exp" placeholder="MM / YY" maxlength="7" oninput="fmtExp(this)"></div>
+                    <div class="fg"><label class="fl">CVV</label><input type="password" class="fi" id="dc-cvv" placeholder="•••" maxlength="4"></div>
                 </div>
-                <div class="pf-group"><label class="pf-label">Cardholder Name</label><input type="text" class="pf-input" id="debit-name" placeholder="Name as on card"></div>
-                <button class="pay-btn" id="debitBtn" onclick="processCard('debit')">
-                    <span id="debitLabel">🏦 Pay ₱{{ "{:,.0f}".format(booking.total_price) }}</span>
+                <div class="fg"><label class="fl">Cardholder Name</label><input type="text" class="fi" id="dc-name" placeholder="Name on card"></div>
+                <button class="pay-btn" onclick="doPayment('debit_card')">
+                    <span id="dc-lbl">🏦 Pay ₱{{ "{:,.0f}".format(booking.total_price) }}</span>
                 </button>
             </div>
 
             <div id="pay-error"></div>
-            <div class="powered-by">🔒 Powered by <strong>PayMongo</strong> · PCI-DSS Compliant</div>
+
             <div style="text-align:center;margin-top:14px;">
-                <a href="/payment/cancel?ref={{ booking.ref_code }}" style="font-size:12px;color:#555;text-decoration:underline;"
-                   onclick="return confirm('Cancel? Your reserved seats will be released.')">Cancel and release seats</a>
+                <a href="/payment/cancel?ref={{ booking.ref_code }}"
+                   style="font-size:12px;color:#555;text-decoration:underline;"
+                   onclick="return confirm('Cancel? Your reserved seats will be released.')">
+                   Cancel and release seats
+                </a>
             </div>
         </div>
     </div>
 </div>
-<div class="result-overlay" id="resultOverlay">
+
+<!-- RESULT OVERLAY -->
+<div class="result-ov" id="resultOv">
     <div class="result-box" id="resultBox">
-        <div class="result-icon"  id="resultIcon">⏳</div>
-        <div class="result-title" id="resultTitle">Processing…</div>
-        <div class="result-msg"   id="resultMsg">Please wait while we confirm your payment.</div>
-        <div class="result-pay-id" id="resultPayId"></div>
-        <div class="result-actions" id="resultActions" style="display:none;"></div>
+        <div class="ri" id="ri">⏳</div>
+        <div class="rt" id="rt">Processing…</div>
+        <div class="rm" id="rm">Please wait.</div>
+        <div class="rpid" id="rpid"></div>
+        <div class="ra" id="ra" style="display:none;"></div>
     </div>
 </div>
 <div class="footer-bar"><p class="footer-text">© 2025 TICK.IT — All rights reserved</p></div>
+
 <script>
-const REF_CODE = '{{ booking.ref_code }}';
-const AMOUNT   = {{ booking.total_price }};
-const HAS_PM   = {{ 'true' if has_paymongo else 'false' }};
-let activeMethod = 'gcash', pollTimer = null;
+const REF = '{{ booking.ref_code }}';
+let method = 'gcash';
 
 // Countdown
 let secsLeft = {{ secs_left }};
+const cEl = document.getElementById('countdown');
 (function tick(){
-    if(secsLeft<=0){countEl.textContent='EXPIRED';countEl.style.color='#ff4444';document.querySelectorAll('.pay-btn').forEach(b=>{b.disabled=true;});return;}
+    if(secsLeft<=0){cEl.textContent='EXPIRED';cEl.style.color='#ff4444';document.querySelectorAll('.pay-btn').forEach(b=>b.disabled=true);return;}
     const m=Math.floor(secsLeft/60),s=secsLeft%60;
-    countEl.textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
-    secsLeft--;setTimeout(tick,1000);
+    cEl.textContent=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');secsLeft--;setTimeout(tick,1000);
 })();
-const countEl=document.getElementById('countdown');
 
-function switchMethod(m){
-    activeMethod=m;clearInterval(pollTimer);
-    ['gcash','paymaya','credit_card','debit_card'].forEach(id=>{
+function sw(m){
+    method=m;
+    ['gcash','maya','credit_card','debit_card'].forEach(id=>{
         document.getElementById('form-'+id).style.display=id===m?'':'none';
         document.getElementById('tab-'+id).classList.toggle('active',id===m);
-    });hideError();
+    });
+    document.getElementById('pay-error').style.display='none';
 }
-function formatCard(inp,brandId){
+function fmtCard(inp,bid){
     let v=inp.value.replace(/\D/g,'').slice(0,16);
     inp.value=v.replace(/(.{4})/g,'$1 ').trim();
-    const b=document.getElementById(brandId);
+    const b=document.getElementById(bid);
     if(b)b.textContent=/^4/.test(v)?'· Visa':/^5[1-5]/.test(v)?'· Mastercard':/^3[47]/.test(v)?'· Amex':'';
 }
-function formatExpiry(inp){let v=inp.value.replace(/\D/g,'').slice(0,4);if(v.length>2)v=v.slice(0,2)+' / '+v.slice(2);inp.value=v;}
-function showError(msg){const el=document.getElementById('pay-error');el.innerHTML='⚠️ '+msg;el.style.display='block';}
-function hideError(){document.getElementById('pay-error').style.display='none';}
+function fmtExp(inp){let v=inp.value.replace(/\D/g,'').slice(0,4);if(v.length>2)v=v.slice(0,2)+' / '+v.slice(2);inp.value=v;}
 
-async function initGCash(){
-    if(secsLeft<=0){showError('Reservation expired. Please rebook.');return;}
-    hideError();
-    const btn=document.getElementById('gcashBtn');
-    btn.disabled=true;btn.innerHTML='<div class="spinner"></div><span>Generating QR…</span>';
-    if(!HAS_PM){await fallback('gcash');return;}
-    try{
-        const res=await fetch('/payment/create-source',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ref_code:REF_CODE,type:'gcash'})});
-        const data=await res.json();
-        if(!data.ok){showError(data.msg);btn.disabled=false;btn.innerHTML='<span>📱 Generate GCash QR</span>';return;}
-        renderQR(data.checkout_url);
-        document.getElementById('gcash-link').href=data.checkout_url;
-        document.getElementById('gcash-manual').style.display='block';
-        document.getElementById('gcash-status').style.display='block';
-        btn.innerHTML='<span>🔄 Re-generate QR</span>';btn.disabled=false;
-        startPoll(data.source_id);
-    }catch(e){showError('Gateway error: '+e.message);btn.disabled=false;btn.innerHTML='<span>📱 Try Again</span>';}
-}
-
-function renderQR(url){
-    const box=document.getElementById('qr-box');box.innerHTML='';
-    new QRCode(box,{text:url,width:180,height:180,colorDark:'#000000',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});
-}
-
-function startPoll(sid){
-    clearInterval(pollTimer);let tries=0;
-    pollTimer=setInterval(async()=>{
-        if(++tries>72){clearInterval(pollTimer);return;}
-        try{
-            const r=await fetch('/payment/poll-source/'+sid+'?ref='+REF_CODE);
-            const d=await r.json();
-            if(d.status==='paid'){clearInterval(pollTimer);showResult('paid','GCash payment confirmed! 🎉',sid);}
-            else if(d.status==='failed'||d.status==='expired'){clearInterval(pollTimer);showResult('failed','Payment not completed. Seats released.');}
-        }catch(e){}
-    },5000);
-}
-
-async function initMaya(){
-    if(secsLeft<=0){showError('Reservation expired.');return;}
-    hideError();
-    if(!HAS_PM){await fallback('paymaya');return;}
-    const btn=document.getElementById('mayaBtn');
-    btn.disabled=true;btn.innerHTML='<div class="spinner"></div><span>Connecting…</span>';
-    try{
-        const res=await fetch('/payment/create-source',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ref_code:REF_CODE,type:'paymaya'})});
-        const data=await res.json();
-        if(!data.ok){showError(data.msg);btn.disabled=false;btn.innerHTML='<span>💜 Continue to Maya →</span>';return;}
-        window.location.href=data.checkout_url;
-    }catch(e){showError('Gateway error: '+e.message);btn.disabled=false;btn.innerHTML='<span>💜 Continue to Maya →</span>';}
-}
-
-function validateCard(prefix){
-    const num=document.getElementById(prefix+'-number').value.replace(/\s/g,'');
-    const expiry=document.getElementById(prefix+'-expiry').value;
-    const cvv=document.getElementById(prefix+'-cvv').value;
-    const name=document.getElementById(prefix+'-name').value.trim();
-    if(num.length<13)return'Enter a valid card number.';
-    if(!/^\d{2} \/ \d{2}$/.test(expiry))return'Enter expiry as MM / YY.';
-    const[mm,yy]=expiry.split(' / ').map(Number);
-    if(new Date(2000+yy,mm-1)<new Date())return'Card is expired.';
-    if(mm<1||mm>12)return'Invalid expiry month.';
-    if(!/^\d{3,4}$/.test(cvv))return'CVV must be 3-4 digits.';
-    if(!name)return'Enter cardholder name.';
+function validate(){
+    if(method==='gcash'){
+        const n=document.getElementById('gcash-num').value.replace(/\D/g,'');
+        if(n.length!==11)return'Enter a valid GCash number (09XXXXXXXXX).';
+    } else if(method==='maya'){
+        const n=document.getElementById('maya-num').value.replace(/\D/g,'');
+        if(n.length!==11)return'Enter a valid Maya number (09XXXXXXXXX).';
+    } else {
+        const prefix=method==='credit_card'?'cc':'dc';
+        const num=document.getElementById(prefix+'-num').value.replace(/\s/g,'');
+        const exp=document.getElementById(prefix+'-exp').value;
+        const cvv=document.getElementById(prefix+'-cvv').value;
+        const nm =document.getElementById(prefix+'-name').value.trim();
+        if(num.length<13)return'Enter a valid card number.';
+        if(!/^\d{2} \/ \d{2}$/.test(exp))return'Enter expiry as MM / YY.';
+        const[mm,yy]=exp.split(' / ').map(Number);
+        if(new Date(2000+yy,mm-1)<new Date())return'Card is expired.';
+        if(!/^\d{3,4}$/.test(cvv))return'CVV must be 3–4 digits.';
+        if(!nm)return'Enter cardholder name.';
+    }
     return null;
 }
 
-async function processCard(type){
-    if(secsLeft<=0){showError('Reservation expired.');return;}
-    const prefix=type==='debit'?'debit':'card';
-    const err=validateCard(prefix);
-    if(err){showError(err);return;}
-    hideError();
-    if(!HAS_PM){await fallback(type==='debit'?'debit_card':'credit_card');return;}
-    const btnId=type==='debit'?'debitBtn':'cardBtn';
-    const btn=document.getElementById(btnId);
-    btn.disabled=true;btn.innerHTML='<div class="spinner"></div><span>Processing card…</span>';
+async function doPayment(m){
+    if(secsLeft<=0){setErr('Reservation expired. Please start a new booking.');return;}
+    const e=validate();
+    if(e){setErr(e);return;}
+    setErr('');
+    const lbl=document.getElementById(m+'-lbl') || document.querySelector('#form-'+m+' .pay-btn span');
+    const btn=lbl?.closest('button');
+    if(btn){btn.disabled=true;btn.innerHTML='<div class="spinner"></div><span>Processing…</span>';}
     showResult('processing');
+    await new Promise(r=>setTimeout(r,1400+Math.random()*800));
     try{
-        const ir=await fetch('/payment/create-intent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ref_code:REF_CODE})});
-        const id=await ir.json();
-        if(!id.ok){hideOverlay();showError(id.msg);btn.disabled=false;btn.innerHTML='<span>💳 Pay ₱'+AMOUNT.toLocaleString()+'</span>';return;}
-        const num=document.getElementById(prefix+'-number').value.replace(/\s/g,'');
-        const expiry=document.getElementById(prefix+'-expiry').value;
-        const cvv=document.getElementById(prefix+'-cvv').value;
-        const name=document.getElementById(prefix+'-name').value.trim();
-        const[mm,yy]=expiry.split(' / ');
-        const pmRes=await fetch('https://api.paymongo.com/v1/payment_methods',{
-            method:'POST',
-            headers:{'Content-Type':'application/json','Authorization':'Basic '+btoa(id.client_key+':')},
-            body:JSON.stringify({data:{attributes:{type:'card',details:{card_number:num,exp_month:parseInt(mm),exp_year:parseInt('20'+yy),cvc:cvv},billing:{name}}}})
-        });
-        const pmData=await pmRes.json();
-        if(pmData.errors){hideOverlay();showError(pmData.errors[0].detail);btn.disabled=false;btn.innerHTML='<span>💳 Pay ₱'+AMOUNT.toLocaleString()+'</span>';return;}
-        const pmId=pmData.data.id;
-        const attRes=await fetch('https://api.paymongo.com/v1/payment_intents/'+id.intent_id+'/attach',{
-            method:'POST',
-            headers:{'Content-Type':'application/json','Authorization':'Basic '+btoa(id.client_key+':')},
-            body:JSON.stringify({data:{attributes:{payment_method:pmId,client_key:id.client_key,return_url:window.location.href}}})
-        });
-        const attData=await attRes.json();
-        const status=attData.data?.attributes?.status||'awaiting_payment_method';
-        const cr=await fetch('/payment/confirm-intent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ref_code:REF_CODE,intent_id:id.intent_id,status})});
-        const cd=await cr.json();
-        if(status==='succeeded'||cd.status==='paid'){showResult('paid','Card payment successful! 🎉',id.intent_id);}
-        else if(status==='awaiting_next_action'){window.location.href=attData.data.attributes.next_action.redirect.url;}
-        else{hideOverlay();showError('Card declined. Try another card or payment method.');btn.disabled=false;btn.innerHTML='<span>💳 Pay ₱'+AMOUNT.toLocaleString()+'</span>';}
-    }catch(e){hideOverlay();showError('Error: '+(e.message||'Unknown'));btn.disabled=false;btn.innerHTML='<span>💳 Pay ₱'+AMOUNT.toLocaleString()+'</span>';}
+        const fd=new FormData();
+        fd.append('ref_code',REF);
+        fd.append('payment_method',m);
+        const res=await fetch('/payment/process',{method:'POST',body:fd});
+        const d=await res.json();
+        // PayMongo redirect flow
+        if(d.status==='redirect' && d.checkout_url){
+            document.getElementById('ri').textContent='🔐';
+            document.getElementById('rt').textContent='Redirecting to PayMongo…';
+            document.getElementById('rm').textContent='You will be redirected to complete payment securely.';
+            setTimeout(()=>{ window.location.href=d.checkout_url; },1200);
+            return;
+        }
+        showResult(d.status,d.msg,d.payment_id);
+    }catch(ex){
+        showResult('error','Network error. Please try again.');
+    }
+    if(btn){btn.disabled=false;btn.innerHTML='<span>Retry</span>';}
 }
 
-async function fallback(method){
-    showResult('processing');
-    await new Promise(r=>setTimeout(r,2000+Math.random()*1500));
-    const body=new FormData();body.append('ref_code',REF_CODE);body.append('payment_method',method);
-    const res=await fetch('/payment/process',{method:'POST',body});
-    const data=await res.json();
-    showResult(data.status,(data.msg||'')+(HAS_PM?'':' (Demo mode)'),data.payment_id);
+function setErr(msg){
+    const el=document.getElementById('pay-error');
+    if(!msg){el.style.display='none';return;}
+    el.innerHTML='⚠️ '+msg;el.style.display='block';
 }
 
-function showResult(status,msg,payId){
-    const overlay=document.getElementById('resultOverlay');
-    overlay.classList.add('show');
+function showResult(status,msg,pid){
+    const ov=document.getElementById('resultOv');ov.classList.add('show');
     const icons={paid:'🎉',failed:'❌',pending:'⏳',processing:'⏳',error:'⚠️'};
-    const titles={paid:'Payment Successful!',failed:'Payment Failed',pending:'Payment Pending',processing:'Processing…',error:'Something went wrong'};
+    const titles={paid:'Booking Confirmed!',failed:'Payment Failed',pending:'Payment Pending',processing:'Processing…',error:'Error'};
     const colors={paid:'#4caf50',failed:'#cc0000',pending:'#cc8800'};
-    document.getElementById('resultIcon').textContent=icons[status]||'⚠️';
-    document.getElementById('resultTitle').textContent=titles[status]||status;
-    document.getElementById('resultMsg').textContent=msg||'';
-    document.getElementById('resultPayId').textContent=payId?'ID: '+payId:'';
+    document.getElementById('ri').textContent=icons[status]||'⚠️';
+    document.getElementById('rt').textContent=titles[status]||status;
+    document.getElementById('rm').textContent=msg||'';
+    document.getElementById('rpid').textContent=pid?'Ref: '+pid:'';
     if(colors[status])document.getElementById('resultBox').style.borderColor=colors[status];
-    const actions=document.getElementById('resultActions');
-    if(status==='processing'){actions.style.display='none';return;}
-    actions.style.display='flex';
-    if(status==='paid')actions.innerHTML='<a href="/my-bookings" class="r-btn-outline">My Bookings</a><a href="/payment/result?ref='+REF_CODE+'" class="r-btn-red">View Receipt →</a>';
-    else if(status==='failed')actions.innerHTML='<a href="/booking" class="r-btn-outline">Try Again</a><a href="/home" class="r-btn-red">Go Home</a>';
-    else if(status==='pending')actions.innerHTML='<a href="/my-bookings" class="r-btn-outline">My Bookings</a><a href="/payment/result?ref='+REF_CODE+'" class="r-btn-red">Check Status →</a>';
-    else actions.innerHTML='<button onclick="hideOverlay()" class="r-btn-red">Try Again</button>';
+    const ra=document.getElementById('ra');
+    if(status==='processing'){ra.style.display='none';return;}
+    ra.style.display='flex';
+    if(status==='paid'){
+        ra.innerHTML='<a href="/my-bookings" class="rb-o">My Bookings</a><a href="/payment/result?ref='+REF+'" class="rb-r">View Receipt →</a>';
+    } else if(status==='failed'){
+        ra.innerHTML='<a href="/booking" class="rb-o">Try Again</a><a href="/home" class="rb-r">Go Home</a>';
+    } else if(status==='pending'){
+        ra.innerHTML='<a href="/my-bookings" class="rb-o">My Bookings</a><a href="/payment/result?ref='+REF+'" class="rb-r">Check Status →</a>';
+    } else {
+        ra.innerHTML='<button onclick="document.getElementById(\'resultOv\').classList.remove(\'show\')" class="rb-r">Try Again</button>';
+    }
 }
-function hideOverlay(){document.getElementById('resultOverlay').classList.remove('show');}
 </script>
 </body>
 </html>

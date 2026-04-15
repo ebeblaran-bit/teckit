@@ -1,9 +1,13 @@
 from flask import (Flask, render_template, request, redirect,
                    url_for, session, flash, jsonify)
 import mysql.connector, bcrypt, re, uuid, os, string, random, base64
-import urllib.request, urllib.parse, json as _json
 from functools import wraps
 from datetime import datetime, date, timedelta
+try:
+    import requests as req_lib
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
 
 # ─────────────────────────────────────────────────────────────
 #  APP CONFIG
@@ -48,57 +52,50 @@ PAY_SUCCESS_RATE = 0.80
 PAY_FAILED_RATE  = 0.15
 # PAY_PENDING_RATE = 0.05  (remainder)
 
+# ─── PayMongo TEST MODE ───────────────────────────────────────────────────────
+# Replace these with your PayMongo TEST keys from https://dashboard.paymongo.com
+# Use TEST keys only — never commit live keys to source control.
+PAYMONGO_PUBLIC_KEY = 'pk_test_1nfGmEUQPQKzvcQ2jeBzGBKC'
+PAYMONGO_BASE_URL   = 'https://api.paymongo.com/v1'
+                       and REQUESTS_AVAILABLE)
 
-# ─────────────────────────────────────────────────────────────
-#  PAYMONGO CONFIG
-#  Set your real PayMongo secret key here (from dashboard.paymongo.com)
-# ─────────────────────────────────────────────────────────────
-PAYMONGO_SECRET_KEY = os.environ.get('PAYMONGO_SECRET_KEY', '')  # set in environment or replace here
-PAYMONGO_BASE       = 'https://api.paymongo.com/v1'
+def _paymongo_auth():
+    return base64.b64encode(f'{PAYMONGO_SECRET_KEY}:'.encode()).decode()
 
-def _pm_headers():
-    token = base64.b64encode(f'{PAYMONGO_SECRET_KEY}:'.encode()).decode()
-    return {
-        'Authorization': f'Basic {token}',
+def create_paymongo_link(amount_centavos, description, ref_code, success_url):
+    """Create a PayMongo Payment Link (test mode). Returns (link_id, checkout_url) or raises."""
+    headers = {
+        'Authorization': f'Basic {_paymongo_auth()}',
         'Content-Type':  'application/json',
         'Accept':        'application/json',
     }
+    body = {
+        'data': {
+            'attributes': {
+                'amount':      amount_centavos,
+                'description': description,
+                'remarks':     ref_code,
+            }
+        }
+    }
+    resp = req_lib.post(f'{PAYMONGO_BASE_URL}/links', headers=headers,
+                        json=body, timeout=20)
+    if resp.status_code not in (200, 201):
+        raise Exception(f'PayMongo error {resp.status_code}: {resp.text}')
+    data = resp.json().get('data', {})
+    attrs = data.get('attributes', {})
+    return data.get('id', ''), attrs.get('checkout_url', '')
 
-def _pm_post(path, payload):
-    """Call PayMongo API. Returns (data_dict, error_str)."""
-    if not PAYMONGO_SECRET_KEY:
-        return None, 'PayMongo secret key not configured.'
-    try:
-        data = _json.dumps(payload).encode()
-        req  = urllib.request.Request(
-            PAYMONGO_BASE + path,
-            data=data, headers=_pm_headers(), method='POST'
-        )
-        with urllib.request.urlopen(req, timeout=15) as r:
-            return _json.loads(r.read()), None
-    except urllib.error.HTTPError as e:
-        err_body = e.read().decode()
-        try:
-            err_json = _json.loads(err_body)
-            msg = err_json.get('errors', [{}])[0].get('detail', err_body)
-        except Exception:
-            msg = err_body
-        return None, msg
-    except Exception as ex:
-        return None, str(ex)
+def verify_paymongo_link(link_id):
+    """Fetch a PayMongo link and return its status ('unpaid', 'paid', etc.)."""
+    headers = {'Authorization': f'Basic {_paymongo_auth()}', 'Accept': 'application/json'}
+    resp = req_lib.get(f'{PAYMONGO_BASE_URL}/links/{link_id}', headers=headers, timeout=15)
+    if resp.status_code != 200:
+        return 'unknown'
+    attrs = resp.json().get('data', {}).get('attributes', {})
+    # PayMongo link status: 'unpaid' | 'paid'
+    return attrs.get('status', 'unknown')
 
-def _pm_get(path):
-    """GET PayMongo resource. Returns (data_dict, error_str)."""
-    if not PAYMONGO_SECRET_KEY:
-        return None, 'PayMongo secret key not configured.'
-    try:
-        req = urllib.request.Request(
-            PAYMONGO_BASE + path, headers=_pm_headers(), method='GET'
-        )
-        with urllib.request.urlopen(req, timeout=15) as r:
-            return _json.loads(r.read()), None
-    except Exception as ex:
-        return None, str(ex)
 
 RESERVATION_MINUTES = 15   # seat lock duration
 
@@ -313,7 +310,31 @@ def get_movies_with_status(db):
         FROM movies m WHERE m.status='active'
         ORDER BY today_count DESC, next_date ASC
     """, (now, today))
-    return [dict(r) for r in raw]
+    today_dt = date.today()
+    tomorrow = today_dt + timedelta(days=1)
+    result = []
+    for r in raw:
+        row = dict(r)
+        nd = row.get('next_date')
+        tc = row.get('today_count') or 0
+        # Build human-readable status tag
+        if tc > 0:
+            row['show_status'] = 'showing_today'
+            row['show_label']  = 'Showing Today'
+        elif nd:
+            nd_dt = nd if isinstance(nd, date) else date.fromisoformat(str(nd))
+            if nd_dt == tomorrow:
+                row['show_status'] = 'showing_soon'
+                row['show_label']  = f"Showing Tomorrow"
+            else:
+                fmt = nd_dt.strftime('%b %d')
+                row['show_status'] = 'upcoming'
+                row['show_label']  = f"Showing on {fmt}"
+        else:
+            row['show_status'] = 'ended'
+            row['show_label']  = 'Run Ended'
+        result.append(row)
+    return result
 
 # ─────────────────────────────────────────────────────────────
 #  PUBLIC ROUTES
@@ -373,10 +394,6 @@ def booking():
             (movie_id,), one=True)
 
         if selected_movie:
-            cinemas_all = query(db, "SELECT id FROM cinemas")
-            for _c in cinemas_all:
-                ensure_future_showings(db, movie_id, _c['id'], days_ahead=3)
-
             raw_showings = query(db, """
                 SELECT s.id, s.show_date, s.show_time, s.status, s.total_seats,
                        c.name AS cinema_name, c.location AS cinema_location,
@@ -469,12 +486,76 @@ def booking():
             ORDER BY st.row_label, st.seat_number
         """, (showing_id,))
 
-        from collections import defaultdict
-        rows_dict = defaultdict(list)
-        for s in all_seats_raw:
-            rows_dict[s['row_label']].append(dict(s))
-        seat_rows = [{'label': k, 'seats': v, 'category': v[0]['category']}
-                     for k, v in sorted(rows_dict.items())]
+        # Try to build full grid (with aisles) from hall_seat_config
+        hall_id_for_grid = selected_showing.get('hall_id') if selected_showing else None
+        if not hall_id_for_grid:
+            sh_row = query(db, "SELECT hall_id FROM showings WHERE id=%s", (showing_id,), one=True)
+            if sh_row:
+                hall_id_for_grid = sh_row.get('hall_id')
+
+        if hall_id_for_grid:
+            hall_config = query(db, """
+                SELECT row_label, col_number, seat_type, is_active, seat_code
+                FROM hall_seat_config WHERE hall_id=%s
+                ORDER BY row_label, col_number
+            """, (hall_id_for_grid,))
+
+            seat_map_by_code = {s['seat_code']: dict(s) for s in all_seats_raw}
+            hall_grid = {}
+            for hc in hall_config:
+                rl = hc['row_label']
+                if rl not in hall_grid:
+                    hall_grid[rl] = {}
+                hall_grid[rl][hc['col_number']] = dict(hc)
+
+            seat_rows = []
+            vip_rows, std_rows = [], []
+            active_count = 0
+            for rl in sorted(hall_grid.keys()):
+                row_seats = []
+                row_has_vip = False
+                row_has_std = False
+                for cn in sorted(hall_grid[rl].keys()):
+                    cfg = hall_grid[rl][cn]
+                    if not cfg['is_active']:
+                        row_seats.append({
+                            'id': None, 'row_label': rl, 'seat_number': cn,
+                            'seat_code': cfg['seat_code'], 'category': 'Aisle',
+                            'status': 'aisle', 'is_aisle': True
+                        })
+                    else:
+                        seat = seat_map_by_code.get(cfg['seat_code'], {})
+                        cat = cfg['seat_type']  # Regular/VIP/PWD
+                        row_seats.append({
+                            'id': seat.get('id'), 'row_label': rl, 'seat_number': cn,
+                            'seat_code': cfg['seat_code'], 'category': cat,
+                            'status': seat.get('status', 'available'), 'is_aisle': False
+                        })
+                        active_count += 1
+                        if cat == 'VIP':
+                            row_has_vip = True
+                        else:
+                            row_has_std = True
+                        if cat == 'VIP' and rl not in vip_rows:
+                            vip_rows.append(rl)
+                        if cat != 'VIP' and rl not in std_rows:
+                            std_rows.append(rl)
+                seat_rows.append({'label': rl, 'seats': row_seats, 'category': 'Mixed'})
+        else:
+            # Fallback: use seats table directly (no aisle info)
+            from collections import defaultdict
+            rows_dict = defaultdict(list)
+            vip_rows, std_rows = [], []
+            active_count = 0
+            for s in all_seats_raw:
+                rows_dict[s['row_label']].append(dict(s) | {'is_aisle': False})
+                active_count += 1
+                if s['category'] == 'VIP' and s['row_label'] not in vip_rows:
+                    vip_rows.append(s['row_label'])
+                elif s['category'] != 'VIP' and s['row_label'] not in std_rows:
+                    std_rows.append(s['row_label'])
+            seat_rows = [{'label': k, 'seats': v, 'category': v[0]['category']}
+                         for k, v in sorted(rows_dict.items())]
 
     db.close()
     return render_template('booking.html',
@@ -486,6 +567,9 @@ def booking():
         selected_showing = selected_showing,
         showing_id       = showing_id,
         seat_rows        = seat_rows,
+        vip_rows         = vip_rows if showing_id else [],
+        std_rows         = std_rows if showing_id else [],
+        active_seat_count= active_count if showing_id else 0,
         booking_success  = False,
         errors={}, form={},
         ticket_prices    = TICKET_PRICES,
@@ -663,235 +747,6 @@ def confirm_booking():
 
 
 # ─────────────────────────────────────────────────────────────
-#  PAYMONGO — Create Source (GCash / Maya)
-# ─────────────────────────────────────────────────────────────
-@app.route('/payment/create-source', methods=['POST'])
-@login_required
-def payment_create_source():
-    data       = request.get_json(force=True)
-    ref_code   = data.get('ref_code', '').strip()
-    pay_type   = data.get('type', 'gcash')   # gcash | paymaya
-
-    if pay_type not in ('gcash', 'paymaya'):
-        return jsonify({'ok': False, 'msg': 'Unsupported source type.'})
-
-    db = get_db()
-    booking = query(db, """
-        SELECT total_price FROM bookings WHERE ref_code=%s AND user_id=%s LIMIT 1
-    """, (ref_code, session['user_id']), one=True)
-    db.close()
-
-    if not booking:
-        return jsonify({'ok': False, 'msg': 'Booking not found.'})
-
-    amount_cents = int(float(booking['total_price']) * 100)
-    success_url  = url_for('payment_result',  ref=ref_code, _external=True)
-    failed_url   = url_for('payment_cancel',  ref=ref_code, _external=True)
-
-    payload = {
-        'data': {
-            'attributes': {
-                'amount':   amount_cents,
-                'redirect': {'success': success_url, 'failed': failed_url},
-                'type':     pay_type,
-                'currency': 'PHP',
-            }
-        }
-    }
-    result, err = _pm_post('/sources', payload)
-    if err:
-        return jsonify({'ok': False, 'msg': f'PayMongo error: {err}'})
-
-    attrs        = result['data']['attributes']
-    source_id    = result['data']['id']
-    checkout_url = attrs['redirect']['checkout_url']
-
-    # Persist source_id for polling
-    db = get_db()
-    execute(db, """
-        INSERT INTO payments (booking_ref, user_id, amount, payment_method, paymongo_link_id, status)
-        VALUES (%s,%s,%s,%s,%s,'pending')
-        ON DUPLICATE KEY UPDATE paymongo_link_id=%s, status='pending'
-    """, (ref_code, session['user_id'], booking['total_price'], pay_type, source_id, source_id))
-    db.commit(); db.close()
-
-    return jsonify({'ok': True, 'source_id': source_id, 'checkout_url': checkout_url})
-
-
-# ─────────────────────────────────────────────────────────────
-#  PAYMONGO — Poll Source Status (GCash / Maya polling)
-# ─────────────────────────────────────────────────────────────
-@app.route('/payment/poll-source/<source_id>')
-@login_required
-def payment_poll_source(source_id):
-    result, err = _pm_get(f'/sources/{source_id}')
-    if err:
-        return jsonify({'ok': False, 'status': 'error', 'msg': err})
-
-    attrs  = result['data']['attributes']
-    status = attrs.get('status', 'pending')   # pending | chargeable | failed | expired
-
-    if status == 'chargeable':
-        # Create charge now
-        ref_code = request.args.get('ref', '')
-        db = get_db()
-        pay_row = query(db, "SELECT * FROM payments WHERE paymongo_link_id=%s LIMIT 1",
-                        (source_id,), one=True)
-        booking_list = query(db, "SELECT * FROM bookings WHERE ref_code=%s AND user_id=%s",
-                             (ref_code, session['user_id'])) if ref_code else []
-        db.close()
-
-        if pay_row and booking_list and pay_row['status'] != 'paid':
-            amount_cents = int(float(pay_row['amount']) * 100)
-            charge_payload = {
-                'data': {
-                    'attributes': {
-                        'amount':      amount_cents,
-                        'source':      {'id': source_id, 'type': 'source'},
-                        'currency':    'PHP',
-                        'description': f'TICK.IT Booking {ref_code}',
-                    }
-                }
-            }
-            charge_result, charge_err = _pm_post('/payments', charge_payload)
-            if not charge_err:
-                charge_status = charge_result['data']['attributes']['status']
-                if charge_status == 'paid':
-                    _mark_booking_paid(ref_code, source_id,
-                                       attrs.get('type', 'gcash'), pay_row['amount'])
-                    return jsonify({'ok': True, 'status': 'paid'})
-
-    return jsonify({'ok': True, 'status': status})
-
-
-# ─────────────────────────────────────────────────────────────
-#  PAYMONGO — Create Payment Intent (Cards)
-# ─────────────────────────────────────────────────────────────
-@app.route('/payment/create-intent', methods=['POST'])
-@login_required
-def payment_create_intent():
-    data     = request.get_json(force=True)
-    ref_code = data.get('ref_code', '').strip()
-
-    db = get_db()
-    booking = query(db, """
-        SELECT total_price FROM bookings WHERE ref_code=%s AND user_id=%s LIMIT 1
-    """, (ref_code, session['user_id']), one=True)
-    db.close()
-
-    if not booking:
-        return jsonify({'ok': False, 'msg': 'Booking not found.'})
-
-    amount_cents = int(float(booking['total_price']) * 100)
-    payload = {
-        'data': {
-            'attributes': {
-                'amount':                 amount_cents,
-                'payment_method_allowed': ['card'],
-                'currency':               'PHP',
-                'capture_type':           'automatic',
-                'description':            f'TICK.IT Booking {ref_code}',
-            }
-        }
-    }
-    result, err = _pm_post('/payment_intents', payload)
-    if err:
-        return jsonify({'ok': False, 'msg': f'PayMongo error: {err}'})
-
-    intent_id  = result['data']['id']
-    client_key = result['data']['attributes']['client_key']
-
-    db = get_db()
-    execute(db, """
-        INSERT INTO payments (booking_ref, user_id, amount, payment_method, paymongo_link_id, status)
-        VALUES (%s,%s,%s,'card',%s,'pending')
-        ON DUPLICATE KEY UPDATE paymongo_link_id=%s, status='pending'
-    """, (ref_code, session['user_id'], booking['total_price'], intent_id, intent_id))
-    db.commit(); db.close()
-
-    return jsonify({'ok': True, 'intent_id': intent_id, 'client_key': client_key})
-
-
-# ─────────────────────────────────────────────────────────────
-#  PAYMONGO — Confirm Card Payment (after frontend attaches method)
-# ─────────────────────────────────────────────────────────────
-@app.route('/payment/confirm-intent', methods=['POST'])
-@login_required
-def payment_confirm_intent():
-    data       = request.get_json(force=True)
-    ref_code   = data.get('ref_code', '').strip()
-    intent_id  = data.get('intent_id', '').strip()
-    pm_status  = data.get('status', '')
-
-    if pm_status == 'succeeded':
-        db = get_db()
-        pay = query(db, "SELECT amount FROM payments WHERE paymongo_link_id=%s LIMIT 1",
-                    (intent_id,), one=True)
-        db.close()
-        if pay:
-            _mark_booking_paid(ref_code, intent_id, 'card', pay['amount'])
-            return jsonify({'ok': True, 'status': 'paid'})
-    return jsonify({'ok': True, 'status': pm_status})
-
-
-# ─────────────────────────────────────────────────────────────
-#  PAYMONGO — PayMongo Webhook (production)
-# ─────────────────────────────────────────────────────────────
-@app.route('/payment/webhook', methods=['POST'])
-def payment_webhook():
-    payload = request.get_json(force=True)
-    try:
-        event_type = payload['data']['attributes']['type']
-        evt_data   = payload['data']['attributes']['data']
-        if event_type == 'payment.paid':
-            ref_code   = evt_data['attributes'].get('description', '')
-            ref_code   = ref_code.replace('TICK.IT Booking ', '').strip()
-            pm_id      = evt_data['id']
-            amount     = evt_data['attributes']['amount'] / 100
-            method     = evt_data['attributes'].get('source', {}).get('type', 'card')
-            if ref_code:
-                _mark_booking_paid(ref_code, pm_id, method, amount)
-    except Exception:
-        pass
-    return jsonify({'ok': True})
-
-
-# ─────────────────────────────────────────────────────────────
-#  HELPER — Mark booking as paid and release/confirm seats
-# ─────────────────────────────────────────────────────────────
-def _mark_booking_paid(ref_code, pm_id, method, amount):
-    try:
-        db = get_db()
-        bookings_list = query(db, "SELECT seat_id, showing_id FROM bookings WHERE ref_code=%s",
-                              (ref_code,))
-        for b in bookings_list:
-            execute(db, "UPDATE seats SET status='booked', locked_until=NULL WHERE id=%s",
-                    (b['seat_id'],))
-        execute(db,
-            "UPDATE bookings SET payment_status='paid', status='Confirmed' WHERE ref_code=%s",
-            (ref_code,))
-        execute(db,
-            "UPDATE payments SET status='paid', paid_at=NOW(), paymongo_link_id=%s WHERE booking_ref=%s",
-            (pm_id, ref_code))
-        if not query(db, "SELECT id FROM payments WHERE booking_ref=%s AND status='paid' LIMIT 1",
-                     (ref_code,), one=True):
-            execute(db, """
-                INSERT INTO payments (booking_ref, amount, payment_method, paymongo_link_id, status, paid_at)
-                VALUES (%s,%s,%s,%s,'paid',NOW())
-            """, (ref_code, amount, method, pm_id))
-        # Check if showing full
-        if bookings_list:
-            avail = query(db,
-                "SELECT COUNT(*) AS cnt FROM seats WHERE showing_id=%s AND status='available'",
-                (bookings_list[0]['showing_id'],), one=True)['cnt']
-            if avail == 0:
-                execute(db, "UPDATE showings SET status='full' WHERE id=%s",
-                        (bookings_list[0]['showing_id'],))
-        db.commit(); db.close()
-    except Exception:
-        pass
-
-# ─────────────────────────────────────────────────────────────
 #  PAYMENT CHECKOUT PAGE
 # ─────────────────────────────────────────────────────────────
 @app.route('/payment/checkout')
@@ -941,17 +796,19 @@ def payment_checkout():
                            user_name=session.get('user_name') or session.get('admin_name', 'Admin'),
                            booking=booking,
                            secs_left=secs_left,
-                           has_paymongo=bool(PAYMONGO_SECRET_KEY))
+                           use_paymongo=USE_PAYMONGO,
+                           paymongo_public_key=PAYMONGO_PUBLIC_KEY,
+)
 
 @app.route('/payment/process', methods=['POST'])
 @login_required
 def payment_process():
     """
-    Simulates PayMongo payment processing locally.
-    No real API calls — purely randomised result with realistic UX.
+    Process payment via PayMongo (test mode) if keys are configured,
+    otherwise fall back to simulation.
     """
     ref_code = request.form.get('ref_code', '').strip()
-    method   = request.form.get('payment_method', 'credit_card')
+    method   = request.form.get('payment_method', 'card')
 
     if not ref_code:
         return jsonify({'ok': False, 'msg': 'Invalid reference.', 'status': 'error'})
@@ -959,8 +816,11 @@ def payment_process():
     db = get_db()
     try:
         bookings_list = query(db, """
-            SELECT b.id, b.seat_id, b.showing_id, b.total_price, b.payment_status
+            SELECT b.id, b.seat_id, b.showing_id, b.total_price, b.payment_status,
+                   m.title AS movie
             FROM bookings b
+            JOIN showings s ON s.id=b.showing_id
+            JOIN movies   m ON m.id=s.movie_id
             WHERE b.ref_code=%s AND b.user_id=%s
         """, (ref_code, session['user_id']))
 
@@ -972,7 +832,37 @@ def payment_process():
             db.close()
             return jsonify({'ok': True, 'status': 'paid', 'msg': 'Payment already processed!'})
 
-        # ── Simulate payment gateway delay + result ───────────
+        amount     = float(bookings_list[0]['total_price'])
+        movie_title = bookings_list[0].get('movie', 'Movie Ticket')
+
+        # ── PAYMONGO LIVE TEST MODE ──────────────────────────────────────────
+        if USE_PAYMONGO:
+            try:
+                amount_centavos = int(amount * 100)
+                success_url = url_for('payment_result', ref=ref_code, _external=True)
+                description = f'TICK.IT — {movie_title} ({ref_code})'
+                link_id, checkout_url = create_paymongo_link(
+                    amount_centavos, description, ref_code, success_url)
+
+                execute(db, """
+                    INSERT INTO payments
+                        (booking_ref, user_id, amount, payment_method, paymongo_link_id, status)
+                    VALUES (%s,%s,%s,%s,%s,'pending')
+                    ON DUPLICATE KEY UPDATE paymongo_link_id=%s, status='pending'
+                """, (ref_code, session['user_id'], amount, method, link_id, link_id))
+                db.commit(); db.close()
+                return jsonify({
+                    'ok':          True,
+                    'status':      'redirect',
+                    'checkout_url': checkout_url,
+                    'msg':         'Redirecting to PayMongo checkout…',
+                })
+            except Exception as e:
+                # If PayMongo API call fails, fall through to simulation
+                db.close()
+                return jsonify({'ok': False, 'msg': f'PayMongo error: {str(e)}', 'status': 'error'})
+
+        # ── SIMULATION FALLBACK (when no real keys configured) ───────────────
         roll = random.random()
         if roll < PAY_SUCCESS_RATE:
             pay_status = 'paid'
@@ -982,10 +872,8 @@ def payment_process():
             pay_status = 'pending'
 
         fake_id = 'SIM-' + uuid.uuid4().hex[:14].upper()
-        amount  = bookings_list[0]['total_price']
 
         if pay_status == 'paid':
-            # Mark all seats as booked
             for b in bookings_list:
                 execute(db, "UPDATE seats SET status='booked', locked_until=NULL WHERE id=%s",
                         (b['seat_id'],))
@@ -997,8 +885,6 @@ def payment_process():
                     (booking_ref, user_id, amount, payment_method, paymongo_link_id, status, paid_at)
                 VALUES (%s,%s,%s,%s,%s,'paid',NOW())
             """, (ref_code, session['user_id'], amount, method, fake_id))
-
-            # Check if showing is now full
             avail = query(db,
                 "SELECT COUNT(*) AS cnt FROM seats WHERE showing_id=%s AND status='available'",
                 (bookings_list[0]['showing_id'],), one=True)['cnt']
@@ -1007,7 +893,6 @@ def payment_process():
                         (bookings_list[0]['showing_id'],))
 
         elif pay_status == 'failed':
-            # Release all locked seats
             for b in bookings_list:
                 execute(db,
                     "UPDATE seats SET status='available', locked_until=NULL WHERE id=%s",
@@ -1020,21 +905,14 @@ def payment_process():
                     (booking_ref, user_id, amount, payment_method, paymongo_link_id, status, failed_at)
                 VALUES (%s,%s,%s,%s,%s,'failed',NOW())
             """, (ref_code, session['user_id'], amount, method, fake_id))
-
-        else:  # pending
+        else:
             execute(db, """
                 INSERT INTO payments
                     (booking_ref, user_id, amount, payment_method, paymongo_link_id, status)
                 VALUES (%s,%s,%s,%s,%s,'pending')
             """, (ref_code, session['user_id'], amount, method, fake_id))
 
-        db.commit()
-        db.close()
-
-        # If paid, call shared helper to ensure everything is consistent
-        if pay_status == 'paid':
-            _mark_booking_paid(ref_code, fake_id, method, amount)
-
+        db.commit(); db.close()
         msgs = {
             'paid':    'Payment successful! Your booking is confirmed. 🎉',
             'failed':  'Payment declined. Your seats have been released.',
@@ -1061,6 +939,28 @@ def payment_result():
     pay_row = None
 
     if ref_code:
+        # Auto-verify PayMongo payment if not yet resolved
+        if USE_PAYMONGO:
+            pr = query(db,
+                "SELECT paymongo_link_id, status FROM payments WHERE booking_ref=%s ORDER BY id DESC LIMIT 1",
+                (ref_code,), one=True)
+            if pr and pr.get('paymongo_link_id') and pr.get('status') == 'pending':
+                try:
+                    link_status = verify_paymongo_link(pr['paymongo_link_id'])
+                    if link_status == 'paid':
+                        bl = query(db, "SELECT id, seat_id, showing_id FROM bookings WHERE ref_code=%s", (ref_code,))
+                        for b in bl:
+                            execute(db, "UPDATE seats SET status='booked', locked_until=NULL WHERE id=%s", (b['seat_id'],))
+                        execute(db, "UPDATE bookings SET payment_status='paid', status='Confirmed' WHERE ref_code=%s", (ref_code,))
+                        execute(db, "UPDATE payments SET status='paid', paid_at=NOW() WHERE booking_ref=%s", (ref_code,))
+                        if bl:
+                            av = query(db, "SELECT COUNT(*) AS cnt FROM seats WHERE showing_id=%s AND status='available'", (bl[0]['showing_id'],), one=True)['cnt']
+                            if av == 0:
+                                execute(db, "UPDATE showings SET status='full' WHERE id=%s", (bl[0]['showing_id'],))
+                        db.commit()
+                except Exception:
+                    pass
+
         row = query(db, """
             SELECT b.ref_code, b.ticket_type, b.total_price, b.ticket_count,
                    b.seat_codes, b.customer_name, b.status, b.payment_status,
@@ -1110,7 +1010,6 @@ def payment_cancel():
     if ref_code:
         try:
             db = get_db()
-            # Release seats
             seats_to_free = query(db,
                 "SELECT seat_id FROM bookings WHERE ref_code=%s", (ref_code,))
             for s in seats_to_free:
@@ -1128,6 +1027,51 @@ def payment_cancel():
             pass
     flash('Payment cancelled. Your seats have been released.', 'warning')
     return redirect(url_for('booking'))
+
+@app.route('/payment/paymongo-callback')
+@login_required
+def paymongo_callback():
+    """
+    PayMongo redirects here after checkout.
+    We verify the link status and update our DB accordingly.
+    """
+    ref_code = request.args.get('ref', '').strip()
+    if not ref_code:
+        flash('Invalid payment reference.', 'error')
+        return redirect(url_for('booking'))
+
+    db = get_db()
+    pay_row = query(db,
+        "SELECT paymongo_link_id FROM payments WHERE booking_ref=%s ORDER BY id DESC LIMIT 1",
+        (ref_code,), one=True)
+
+    if pay_row and pay_row.get('paymongo_link_id') and USE_PAYMONGO:
+        try:
+            link_status = verify_paymongo_link(pay_row['paymongo_link_id'])
+            if link_status == 'paid':
+                bookings_list = query(db,
+                    "SELECT id, seat_id, showing_id FROM bookings WHERE ref_code=%s", (ref_code,))
+                for b in bookings_list:
+                    execute(db, "UPDATE seats SET status='booked', locked_until=NULL WHERE id=%s",
+                            (b['seat_id'],))
+                execute(db,
+                    "UPDATE bookings SET payment_status='paid', status='Confirmed' WHERE ref_code=%s",
+                    (ref_code,))
+                execute(db,
+                    "UPDATE payments SET status='paid', paid_at=NOW() WHERE booking_ref=%s",
+                    (ref_code,))
+                if bookings_list:
+                    avail = query(db,
+                        "SELECT COUNT(*) AS cnt FROM seats WHERE showing_id=%s AND status='available'",
+                        (bookings_list[0]['showing_id'],), one=True)['cnt']
+                    if avail == 0:
+                        execute(db, "UPDATE showings SET status='full' WHERE id=%s",
+                                (bookings_list[0]['showing_id'],))
+                db.commit()
+        except Exception:
+            pass
+    db.close()
+    return redirect(url_for('payment_result', ref=ref_code))
 
 # ─────────────────────────────────────────────────────────────
 #  MY BOOKINGS
@@ -1504,6 +1448,134 @@ def admin_halls_delete():
     except Exception as e:
         flash(f'Error deleting hall: {e}', 'error')
     return redirect(url_for('admin_halls'))
+
+
+# ─────────────────────────────────────────────────────────────
+#  ADMIN — ASSIGN MOVIE TO HALL  (creates showings)
+# ─────────────────────────────────────────────────────────────
+@app.route('/admin/halls/<int:hall_id>/showings')
+@admin_required
+def admin_hall_showings(hall_id):
+    """Show all showings for this hall so admin can manage assignments."""
+    db = get_db()
+    hall = query(db, """
+        SELECT h.*, c.name AS cinema_name, c.id AS cinema_id
+        FROM cinema_halls h
+        JOIN cinemas c ON c.id = h.cinema_id
+        WHERE h.id = %s
+    """, (hall_id,), one=True)
+
+    if not hall:
+        flash('Hall not found.', 'error')
+        return redirect(url_for('admin_halls'))
+
+    showings = query(db, """
+        SELECT s.id, s.show_date, s.show_time, s.status,
+               m.title AS movie_title, m.id AS movie_id,
+               (SELECT COUNT(*) FROM seats st WHERE st.showing_id = s.id AND st.status = 'available') AS avail,
+               (SELECT COUNT(*) FROM seats st WHERE st.showing_id = s.id AND st.status = 'booked')    AS booked,
+               (SELECT COUNT(*) FROM seats st WHERE st.showing_id = s.id)                             AS total_seats_seeded
+        FROM showings s
+        JOIN movies m ON m.id = s.movie_id
+        WHERE s.hall_id = %s
+        ORDER BY s.show_date DESC, s.show_time
+    """, (hall_id,))
+
+    movies = query(db, "SELECT id, title FROM movies WHERE status='active' ORDER BY title")
+    db.close()
+    return render_template('admin_hall_showings.html',
+                           hall=hall, showings=showings, movies=movies,
+                           today=date.today().isoformat())
+
+
+@app.route('/admin/halls/<int:hall_id>/assign-movie', methods=['POST'])
+@admin_required
+def admin_hall_assign_movie(hall_id):
+    """Create one or more showings for a hall by assigning a movie + dates/times."""
+    movie_id   = request.form.get('movie_id', type=int)
+    show_dates = request.form.getlist('show_dates')   # multiple dates allowed
+    show_times = request.form.getlist('show_times')   # multiple times allowed
+
+    if not movie_id or not show_dates or not show_times:
+        flash('Movie, at least one date, and at least one showtime are required.', 'error')
+        return redirect(url_for('admin_hall_showings', hall_id=hall_id))
+
+    db = get_db()
+    hall = query(db, "SELECT cinema_id FROM cinema_halls WHERE id=%s", (hall_id,), one=True)
+    if not hall:
+        flash('Hall not found.', 'error')
+        db.close()
+        return redirect(url_for('admin_halls'))
+
+    created = 0
+    skipped = 0
+    for sd in show_dates:
+        for st in show_times:
+            try:
+                existing = query(db, """
+                    SELECT id FROM showings
+                    WHERE hall_id=%s AND show_date=%s AND show_time=%s
+                """, (hall_id, sd, st), one=True)
+                if existing:
+                    skipped += 1
+                    continue
+                showing_id = execute(db, """
+                    INSERT INTO showings (movie_id, cinema_id, hall_id, show_date, show_time, status)
+                    VALUES (%s, %s, %s, %s, %s, 'open')
+                """, (movie_id, hall['cinema_id'], hall_id, sd, st))
+                # Immediately seed seats from this hall's layout
+                seed_seats_from_hall(db, showing_id, hall_id)
+                created += 1
+            except Exception as e:
+                skipped += 1
+    db.commit()
+    db.close()
+
+    if created:
+        flash(f'{created} showing(s) created successfully! {skipped} skipped (already exist).', 'success')
+    else:
+        flash(f'No new showings created. {skipped} already existed.', 'warning')
+
+    return redirect(url_for('admin_hall_showings', hall_id=hall_id))
+
+
+
+@app.route('/admin/halls/showings/reseed', methods=['POST'])
+@admin_required
+def admin_hall_showing_reseed():
+    showing_id = request.form.get('showing_id', type=int)
+    hall_id    = request.form.get('hall_id',    type=int)
+    if showing_id and hall_id:
+        try:
+            db = get_db()
+            seed_seats_from_hall(db, showing_id, hall_id)
+            db.close()
+            flash('Seats seeded from hall layout.', 'success')
+        except Exception as e:
+            flash(f'Error seeding seats: {e}', 'error')
+    return redirect(url_for('admin_hall_showings', hall_id=hall_id))
+
+@app.route('/admin/halls/showings/delete', methods=['POST'])
+@admin_required
+def admin_hall_showing_delete():
+    """Delete a showing and free its seats."""
+    showing_id = request.form.get('showing_id', type=int)
+    hall_id    = request.form.get('hall_id',    type=int)
+    if not showing_id:
+        flash('Invalid showing.', 'error')
+        return redirect(url_for('admin_halls'))
+    try:
+        db = get_db()
+        # Cancel confirmed bookings first
+        execute(db, "UPDATE bookings SET status='Cancelled' WHERE showing_id=%s", (showing_id,))
+        execute(db, "DELETE FROM seats    WHERE showing_id=%s", (showing_id,))
+        execute(db, "DELETE FROM showings WHERE id=%s",         (showing_id,))
+        db.commit(); db.close()
+        flash('Showing deleted.', 'success')
+    except Exception as e:
+        flash(f'Error: {e}', 'error')
+    return redirect(url_for('admin_hall_showings', hall_id=hall_id))
+
 
 # ─────────────────────────────────────────────────────────────
 #  ADMIN — MOVIES

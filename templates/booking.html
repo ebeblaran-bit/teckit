@@ -147,13 +147,12 @@
                      onerror="this.src='/static/images/no_poster.png'">
                 <div class="mpc-duration">⏱ {{ m.duration_mins }} min</div>
                 {% if m.today_count and m.today_count > 0 %}
-                    <div class="mpc-badge badge-showing">Showing Today</div>
+                    <div class="mpc-badge badge-showing">🟢 Showing Today</div>
                 {% elif m.next_date %}
-                    <div class="mpc-badge badge-upcoming">
-                        From {{ m.next_date.strftime('%b %d') }}
-                    </div>
-                {% elif m.last_played %}
-                    <div class="mpc-badge badge-ended">Run Ended</div>
+                    {% set nd_str = m.next_date.strftime('%b %d') if m.next_date.strftime is defined else m.next_date|string %}
+                    <div class="mpc-badge badge-upcoming">📅 {{ m.show_label or ('Showing on ' ~ nd_str) }}</div>
+                {% else %}
+                    <div class="mpc-badge badge-ended">⚫ Run Ended</div>
                 {% endif %}
             </div>
             <div class="mpc-info">
@@ -163,7 +162,7 @@
                     <span class="star">⭐</span> {{ m.rating }}/10
                 </div>
                 {% if m.next_date and (not m.today_count or m.today_count == 0) %}
-                    <div class="mpc-next">Next: {{ m.next_date.strftime('%b %d, %Y') }}</div>
+                    <div class="mpc-next">🗓 {{ m.show_label }}</div>
                 {% endif %}
             </div>
         </a>
@@ -271,7 +270,15 @@
         <!-- LEFT: Seat Map -->
         <div class="seat-map-panel">
             <h2 class="step-heading">Select Your Seats</h2>
-            <p class="seat-hint">Rows A–B are <strong class="vip-text">VIP</strong> seats. Max 10 seats per booking.</p>
+            {% if vip_rows %}
+            <p class="seat-hint">
+                {% if vip_rows %}<strong class="vip-text">VIP rows: {{ vip_rows|join(', ') }}</strong>{% endif %}
+                {% if std_rows %} &nbsp;·&nbsp; Standard rows: {{ std_rows|join(', ') }}{% endif %}
+                &nbsp;·&nbsp; Max 10 seats per booking.
+            </p>
+            {% else %}
+            <p class="seat-hint">Select your preferred seats below. Max 10 per booking.</p>
+            {% endif %}
 
             <!-- Screen -->
             <div class="screen-wrap">
@@ -283,6 +290,7 @@
             <div class="seat-legend">
                 <span class="leg-item"><span class="leg-box l-avail"></span> Available</span>
                 <span class="leg-item"><span class="leg-box l-vip"></span> VIP</span>
+                <span class="leg-item"><span class="leg-box l-pwd"></span> PWD</span>
                 <span class="leg-item"><span class="leg-box l-selected"></span> Selected</span>
                 <span class="leg-item"><span class="leg-box l-locked"></span> Reserved</span>
                 <span class="leg-item"><span class="leg-box l-booked"></span> Taken</span>
@@ -294,13 +302,15 @@
                 <div class="seat-row">
                     <div class="row-label">{{ row.label }}</div>
                     <div class="row-seats">
-                        <!-- Aisle gap after seat 5 -->
                         {% for seat in row.seats %}
-                        {% if loop.index == 6 %}<div class="aisle-gap"></div>{% endif %}
+                        {% if seat.is_aisle %}
+                        <div class="aisle-gap" title="Aisle"></div>
+                        {% else %}
                         <div class="seat
                             {% if seat.status == 'booked' %} seat-booked
                             {% elif seat.status == 'locked' %} seat-locked
                             {% elif seat.category == 'VIP' %} seat-vip
+                            {% elif seat.category == 'PWD' %} seat-pwd
                             {% else %} seat-available
                             {% endif %}"
                             data-seat-id="{{ seat.id }}"
@@ -311,16 +321,26 @@
                             title="{{ seat.seat_code }} — {{ seat.category }}{% if seat.status == 'booked' %} (Taken){% elif seat.status == 'locked' %} (Reserved){% endif %}">
                             {{ seat.seat_number }}
                         </div>
+                        {% endif %}
                         {% endfor %}
                     </div>
                 </div>
                 {% else %}
-                <div class="seat-loading">⏳ Loading seats...</div>
+                <div class="seat-loading">
+                    <div style="text-align:center;padding:40px 20px;color:#888;">
+                        <div style="font-size:40px;margin-bottom:12px;">🏛️</div>
+                        <div style="font-weight:700;color:#fff;margin-bottom:8px;">No seat layout configured</div>
+                        <div style="font-size:13px;">The admin has not set up a hall layout for this showing yet.</div>
+                    </div>
+                </div>
                 {% endfor %}
             </div>
 
             <div class="seat-map-footer">
-                <span>🎭 Total: 50 seats &nbsp;|&nbsp; Rows A–B: VIP &nbsp;|&nbsp; Rows C–E: Standard</span>
+                <span>🎭 {{ active_seat_count }} bookable seat{{ 's' if active_seat_count != 1 else '' }}
+                {% if vip_rows %}&nbsp;|&nbsp; 🟡 VIP: rows {{ vip_rows|join(', ') }}{% endif %}
+                {% if std_rows %}&nbsp;|&nbsp; ⬛ Standard: rows {{ std_rows|join(', ') }}{% endif %}
+                </span>
             </div>
         </div>
 
@@ -467,7 +487,9 @@ function toggleSeat(el) {
     if (el.classList.contains('seat-selected')) {
         // Deselect
         el.classList.remove('seat-selected');
-        el.classList.add(category === 'VIP' ? 'seat-vip' : 'seat-available');
+        if (category === 'VIP') el.classList.add('seat-vip');
+        else if (category === 'PWD') el.classList.add('seat-pwd');
+        else el.classList.add('seat-available');
         delete selectedSeats[seatId];
         // Unlock on server
         if (SHOWING_ID) {
@@ -492,7 +514,7 @@ function toggleSeat(el) {
             .then(r => r.json())
             .then(data => {
                 if (data.ok) {
-                    el.classList.remove('seat-available', 'seat-vip');
+                    el.classList.remove('seat-available', 'seat-vip', 'seat-pwd');
                     el.classList.add('seat-selected');
                     selectedSeats[seatId] = { code: seatCode, category };
                     updateSummary();
@@ -500,20 +522,20 @@ function toggleSeat(el) {
                 } else {
                     showToast('Seat just taken — please choose another.', 'warn');
                     el.dataset.status = 'locked';
-                    el.classList.remove('seat-available','seat-vip');
+                    el.classList.remove('seat-available', 'seat-vip', 'seat-pwd');
                     el.classList.add('seat-locked');
                 }
             })
             .catch(() => {
                 // Optimistic UI fallback
-                el.classList.remove('seat-available', 'seat-vip');
+                el.classList.remove('seat-available', 'seat-vip', 'seat-pwd');
                 el.classList.add('seat-selected');
                 selectedSeats[seatId] = { code: seatCode, category };
                 updateSummary();
             });
             return; // updateSummary called in .then()
         }
-        el.classList.remove('seat-available', 'seat-vip');
+        el.classList.remove('seat-available', 'seat-vip', 'seat-pwd');
         el.classList.add('seat-selected');
         selectedSeats[seatId] = { code: seatCode, category };
     }
@@ -608,6 +630,7 @@ if (SHOWING_ID) {
                     if (s.status === 'booked')         el.classList.add('seat-booked');
                     else if (s.status === 'locked')    el.classList.add('seat-locked');
                     else if (s.category === 'VIP')     el.classList.add('seat-vip');
+                    else if (s.category === 'PWD')     el.classList.add('seat-pwd');
                     else                               el.classList.add('seat-available');
 
                     // If we had this seat selected and it was taken

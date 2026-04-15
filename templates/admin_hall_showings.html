@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TICK.IT — {{ hall.hall_name }} Showings</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        .hall-hero {
+            background: rgba(206,0,0,0.08); border: 1px solid #300000;
+            border-radius: 14px; padding: 20px 24px; margin-bottom: 24px;
+            display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+        }
+        .hall-icon { font-size: 40px; }
+        .hall-info h2 { font-size: 20px; font-weight: 900; color: #fff; margin-bottom: 4px; }
+        .hall-meta  { font-size: 13px; color: #888; }
+        .hall-meta span { color: #aaa; margin-right: 16px; }
+        .show-card {
+            background: rgba(0,0,0,.5); border: 1px solid #2a0000;
+            border-radius: 10px; padding: 16px 18px; margin-bottom: 10px;
+            display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+        }
+        .show-card:hover { border-color: #500000; }
+        .show-date-block { text-align: center; min-width: 80px; background: rgba(206,0,0,0.12); border: 1px solid #500000; border-radius: 10px; padding: 10px 12px; }
+        .show-date-block .sd-day  { font-size: 28px; font-weight: 900; color: #fff; line-height: 1; }
+        .show-date-block .sd-mon  { font-size: 13px; color: #CE0000; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; margin-top: 2px; }
+        .show-date-block .sd-year { font-size: 11px; color: #888; margin-top: 1px; }
+        .show-time  { font-size: 20px; font-weight: 900; color: #CE0000; min-width: 90px; }
+        .show-movie { font-weight: 700; font-size: 14px; color: #fff; flex: 1; }
+        .show-seats { font-size: 12px; color: #888; min-width: 120px; }
+        .show-seats .s-avail { color: #4caf50; font-weight: 700; }
+        .show-seats .s-booked{ color: #ffcc00; font-weight: 700; }
+        .seat-bar { height: 6px; background: #1a0000; border-radius: 3px; margin-top: 4px; overflow: hidden; }
+        .seat-bar-fill { height: 100%; background: #4caf50; border-radius: 3px; transition: width .3s; }
+        .date-input-group { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+        .date-chip {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: rgba(206,0,0,.15); border: 1px solid #CE0000;
+            border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 700; color: #ff9999;
+        }
+        .date-chip button { background: none; border: none; color: #ff6666; cursor: pointer; font-size: 14px; line-height: 1; padding: 0; }
+        .time-chip {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: rgba(30,100,200,.15); border: 1px solid #2266cc;
+            border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 700; color: #99ccff;
+        }
+        .time-chip button { background: none; border: none; color: #7eb8ff; cursor: pointer; font-size: 14px; line-height: 1; padding: 0; }
+        .quick-times { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+        .qt-btn {
+            padding: 5px 12px; border: 1px solid #2a0000; border-radius: 6px;
+            background: rgba(255,255,255,.04); color: #aaa; font-size: 12px; font-weight: 700;
+            cursor: pointer; transition: all .15s; font-family: 'Inter', sans-serif;
+        }
+        .qt-btn:hover { border-color: #2266cc; color: #99ccff; background: rgba(30,100,200,.1); }
+        .qt-btn.selected { border-color: #2266cc; color: #99ccff; background: rgba(30,100,200,.15); }
+        .summary-box {
+            background: rgba(76,175,80,.06); border: 1px solid #2a4a2a;
+            border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #7fff7f;
+            margin-bottom: 14px; display: none;
+        }
+        .empty-showings { text-align: center; padding: 48px 20px; }
+        .empty-showings .ei { font-size: 48px; margin-bottom: 12px; }
+        .empty-showings .et { font-size: 15px; font-weight: 700; color: #555; }
+    </style>
+</head>
+<body>
+
+<header class="admin-header">
+    <div class="admin-logo">TICK.<span>IT</span></div>
+    <div class="admin-title-bar">{{ hall.cinema_name }} — {{ hall.hall_name }}</div>
+    <div class="admin-header-right">
+        <span style="font-size:13px;color:#888;">Admin</span>
+        <a href="/admin/logout" class="admin-logout-btn">Logout</a>
+    </div>
+</header>
+
+<div class="admin-body">
+    <nav class="admin-sidebar">
+        <span class="sidebar-label">Main</span>
+        <a href="/admin"               class="sidebar-link"><span class="sidebar-icon">📊</span><span>Dashboard</span></a>
+        <div class="sidebar-divider"></div>
+        <span class="sidebar-label">Manage</span>
+        <a href="/admin/movies"        class="sidebar-link"><span class="sidebar-icon">🎬</span><span>Movies</span></a>
+        <a href="/admin/bookings"      class="sidebar-link"><span class="sidebar-icon">🎟️</span><span>Bookings</span></a>
+        <a href="/admin/halls"         class="sidebar-link active"><span class="sidebar-icon">🏛️</span><span>Halls</span></a>
+        <a href="/admin/verifications" class="sidebar-link"><span class="sidebar-icon">🪪</span><span>Verifications</span></a>
+        <a href="/admin/payments"      class="sidebar-link"><span class="sidebar-icon">💳</span><span>Payments</span></a>
+        <a href="/admin/users"         class="sidebar-link"><span class="sidebar-icon">👥</span><span>Users</span></a>
+        <div class="sidebar-divider"></div>
+        <a href="/home"                class="sidebar-link"><span class="sidebar-icon">🏠</span><span>Main Site</span></a>
+    </nav>
+
+    <main class="admin-main">
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for cat, msg in messages %}
+                <div class="alert alert-{{ cat }}">{{ msg }}</div>
+            {% endfor %}
+        {% endwith %}
+
+        <!-- Breadcrumb -->
+        <div style="font-size:13px;color:#666;margin-bottom:16px;">
+            <a href="/admin/halls" style="color:#CE0000;text-decoration:none;">← Back to Halls</a>
+            &nbsp;/&nbsp;{{ hall.cinema_name }} &nbsp;/&nbsp; {{ hall.hall_name }}
+        </div>
+
+        <!-- Hall Hero -->
+        <div class="hall-hero">
+            <div class="hall-icon">🏛️</div>
+            <div class="hall-info">
+                <h2>{{ hall.hall_name }}</h2>
+                <div class="hall-meta">
+                    <span>📍 {{ hall.cinema_name }}</span>
+                    <span>📐 {{ hall.rows_count }} rows × {{ hall.cols_count }} cols</span>
+                    <span>🎟️ {{ showings|length }} showing(s) scheduled</span>
+                </div>
+            </div>
+            <div style="margin-left:auto;display:flex;gap:10px;">
+                <a href="/admin/halls/{{ hall.id }}/editor" class="panel-action-btn" style="background:rgba(255,200,0,.15);color:#ffc800;border:1px solid #ffc800;">✏️ Edit Seat Layout</a>
+                <button class="panel-action-btn" onclick="openAssignModal()">＋ Assign Movie</button>
+            </div>
+        </div>
+
+        <!-- Showings List -->
+        <div class="page-heading">📅 Scheduled Showings</div>
+
+        {% if showings %}
+        <div class="admin-panel">
+            <div class="panel-body" style="padding:16px;">
+                {% for s in showings %}
+                {% set total = s.total_seats_seeded or 1 %}
+                {% set pct   = ((s.booked / total) * 100)|int %}
+                <div class="show-card">
+                    <!-- Date block -->
+                    <div class="show-date-block">
+                        <div class="sd-day">{{ s.show_date.strftime('%d') if s.show_date.strftime is defined else s.show_date }}</div>
+                        <div class="sd-mon">{{ s.show_date.strftime('%b') if s.show_date.strftime is defined else '' }}</div>
+                        <div class="sd-year">{{ s.show_date.strftime('%Y') if s.show_date.strftime is defined else '' }}</div>
+                        {% if s.show_date.strftime is defined %}
+                        <div style="font-size:10px;color:#555;margin-top:3px;">{{ s.show_date.strftime('%A') }}</div>
+                        {% endif %}
+                    </div>
+                    <!-- Time -->
+                    <div class="show-time">
+                        {% set t = s.show_time %}
+                        {% if t %}
+                            {% set parts = t.__str__().split(':') %}
+                            {% set h = parts[0]|int %}
+                            {% if h == 0 %}12:{{ parts[1] }} AM
+                            {% elif h < 12 %}{{ h }}:{{ parts[1] }} AM
+                            {% elif h == 12 %}12:{{ parts[1] }} PM
+                            {% else %}{{ h-12 }}:{{ parts[1] }} PM
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                    <!-- Movie -->
+                    <div class="show-movie">
+                        🎬 {{ s.movie_title }}
+                        <div style="margin-top:4px;">
+                            <span class="badge badge-{{ s.status }}">{{ s.status }}</span>
+                        </div>
+                    </div>
+                    <!-- Seats -->
+                    <div class="show-seats">
+                        <span class="s-avail">{{ s.avail }} available</span> ·
+                        <span class="s-booked">{{ s.booked }} booked</span>
+                        <div style="font-size:10px;color:#555;margin-top:2px;">of {{ s.total_seats_seeded }} total seats</div>
+                        <div class="seat-bar">
+                            <div class="seat-bar-fill" style="width:{{ pct }}%;background:{% if pct > 80 %}#ff4444{% elif pct > 50 %}#ffcc00{% else %}#4caf50{% endif %};"></div>
+                        </div>
+                    </div>
+                    <!-- Actions -->
+                    <div class="tbl-actions">
+                        {% if s.total_seats_seeded == 0 %}
+                        <form method="POST" action="/admin/halls/showings/reseed" style="display:inline;">
+                            <input type="hidden" name="showing_id" value="{{ s.id }}">
+                            <input type="hidden" name="hall_id"    value="{{ hall.id }}">
+                            <button type="submit" class="tbl-btn" style="background:rgba(255,200,0,.12);color:#ffc800;border:1px solid #ffc800;">⟳ Seed Seats</button>
+                        </form>
+                        {% endif %}
+                        {% if s.booked == 0 %}
+                        <form method="POST" action="/admin/halls/showings/delete" style="display:inline;"
+                              onsubmit="return confirm('Delete this showing? This cannot be undone.')">
+                            <input type="hidden" name="showing_id" value="{{ s.id }}">
+                            <input type="hidden" name="hall_id"    value="{{ hall.id }}">
+                            <button type="submit" class="tbl-btn tbl-btn-delete">🗑️ Delete</button>
+                        </form>
+                        {% else %}
+                        <span style="font-size:11px;color:#555;">Has bookings</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <div class="admin-panel">
+            <div class="panel-body">
+                <div class="empty-showings">
+                    <div class="ei">🎬</div>
+                    <div class="et">No showings yet.<br>Assign a movie to this hall to create showings.</div>
+                    <button class="panel-action-btn" style="margin-top:16px;" onclick="openAssignModal()">＋ Assign First Movie</button>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+    </main>
+</div>
+
+<footer class="admin-footer">© 2025 TICK.IT — Admin Panel</footer>
+
+<!-- ── ASSIGN MOVIE MODAL ── -->
+<div class="modal-overlay" id="assignModal">
+    <div class="modal-box" style="max-width:560px;">
+        <button class="modal-close" onclick="closeModal()">×</button>
+        <div class="modal-title">🎬 Assign Movie to {{ hall.hall_name }}</div>
+
+        <form method="POST" action="/admin/halls/{{ hall.id }}/assign-movie" id="assignForm">
+            <!-- Movie -->
+            <div class="form-group">
+                <label class="form-label">Movie *</label>
+                <select name="movie_id" class="form-control" required id="movieSelect">
+                    <option value="" disabled selected>Select a movie…</option>
+                    {% for m in movies %}
+                    <option value="{{ m.id }}">{{ m.title }}</option>
+                    {% endfor %}
+                </select>
+                {% if not movies %}
+                <div style="font-size:12px;color:#ff6666;margin-top:6px;">No active movies found. Add a movie first in <a href="/admin/movies" style="color:#CE0000;">Movies management</a>.</div>
+                {% endif %}
+            </div>
+
+            <!-- Dates -->
+            <div class="form-group">
+                <label class="form-label">Show Date(s) *</label>
+                <div style="display:flex;gap:8px;margin-bottom:8px;">
+                    <input type="date" id="dateInput" class="form-control" style="flex:1;"
+                           min="{{ today }}"
+                           onchange="addDate(this.value); this.value='';">
+                </div>
+                <div id="dateChips" style="display:flex;flex-wrap:wrap;gap:6px;min-height:24px;"></div>
+                <div id="dateHiddens"></div>
+                <div style="font-size:11px;color:#666;margin-top:4px;">Click the date picker to add multiple dates.</div>
+            </div>
+
+            <!-- Times -->
+            <div class="form-group">
+                <label class="form-label">Show Time(s) *</label>
+                <div class="quick-times" id="quickTimes">
+                    <button type="button" class="qt-btn" onclick="toggleQuickTime('10:00')">10:00 AM</button>
+                    <button type="button" class="qt-btn" onclick="toggleQuickTime('13:30')">1:30 PM</button>
+                    <button type="button" class="qt-btn" onclick="toggleQuickTime('16:30')">4:30 PM</button>
+                    <button type="button" class="qt-btn" onclick="toggleQuickTime('19:00')">7:00 PM</button>
+                    <button type="button" class="qt-btn" onclick="toggleQuickTime('21:30')">9:30 PM</button>
+                </div>
+                <div style="display:flex;gap:8px;margin-bottom:8px;">
+                    <input type="time" id="timeInput" class="form-control" style="flex:1;"
+                           onchange="addTime(this.value); this.value='';">
+                </div>
+                <div id="timeChips" style="display:flex;flex-wrap:wrap;gap:6px;min-height:24px;"></div>
+                <div id="timeHiddens"></div>
+                <div style="font-size:11px;color:#666;margin-top:4px;">Choose preset times or pick a custom time.</div>
+            </div>
+
+            <!-- Summary preview -->
+            <div class="summary-box" id="summaryBox"></div>
+
+            <div style="background:rgba(255,193,7,.08);border:1px solid #997000;border-radius:8px;padding:12px;font-size:12px;color:#ffd966;line-height:1.6;margin-bottom:16px;">
+                💡 <strong>How it works:</strong> Each date × time combination creates one showing.<br>
+                Seats are automatically generated from this hall's configured seat layout.<br>
+                Users can then book tickets for those showings.
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn-cancel" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn-submit" id="submitBtn" onclick="return validateAssign()">Create Showings →</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+const today = '{{ today }}';
+let selectedDates = [];
+let selectedTimes = [];
+
+// ── MODAL ──────────────────────────────────────────────────
+function openAssignModal() { document.getElementById('assignModal').classList.add('open'); }
+function closeModal()       { document.getElementById('assignModal').classList.remove('open'); }
+document.getElementById('assignModal').addEventListener('click', e => {
+    if (e.target === document.getElementById('assignModal')) closeModal();
+});
+
+// ── DATES ──────────────────────────────────────────────────
+function addDate(val) {
+    if (!val || selectedDates.includes(val)) return;
+    selectedDates.push(val);
+    renderDateChips();
+    updateSummary();
+}
+function removeDate(val) {
+    selectedDates = selectedDates.filter(d => d !== val);
+    renderDateChips();
+    updateSummary();
+}
+function renderDateChips() {
+    const chips  = document.getElementById('dateChips');
+    const hidden = document.getElementById('dateHiddens');
+    chips.innerHTML  = '';
+    hidden.innerHTML = '';
+    selectedDates.sort().forEach(d => {
+        const dt  = new Date(d + 'T00:00:00');
+        const lbl = dt.toLocaleDateString('en-PH', {weekday:'short', month:'short', day:'numeric'});
+        chips.innerHTML  += `<span class="date-chip">${lbl}<button type="button" onclick="removeDate('${d}')">×</button></span>`;
+        hidden.innerHTML += `<input type="hidden" name="show_dates" value="${d}">`;
+    });
+}
+
+// ── TIMES ──────────────────────────────────────────────────
+function addTime(val) {
+    if (!val || selectedTimes.includes(val)) return;
+    selectedTimes.push(val);
+    renderTimeChips();
+    updateSummary();
+}
+function removeTime(val) {
+    selectedTimes = selectedTimes.filter(t => t !== val);
+    // un-select quick button
+    document.querySelectorAll('.qt-btn').forEach(b => {
+        if (b.dataset.time === val) b.classList.remove('selected');
+    });
+    renderTimeChips();
+    updateSummary();
+}
+function toggleQuickTime(val) {
+    const btn = [...document.querySelectorAll('.qt-btn')].find(b => b.textContent.trim().startsWith(val.split(':')[0]));
+    if (selectedTimes.includes(val)) {
+        removeTime(val);
+    } else {
+        addTime(val);
+        if (btn) btn.classList.add('selected');
+    }
+}
+function formatTime12(t) {
+    const [h,m] = t.split(':').map(Number);
+    const suf = h < 12 ? 'AM' : 'PM';
+    return `${h%12||12}:${String(m).padStart(2,'0')} ${suf}`;
+}
+function renderTimeChips() {
+    const chips  = document.getElementById('timeChips');
+    const hidden = document.getElementById('timeHiddens');
+    chips.innerHTML  = '';
+    hidden.innerHTML = '';
+    selectedTimes.sort().forEach(t => {
+        chips.innerHTML  += `<span class="time-chip">${formatTime12(t)}<button type="button" onclick="removeTime('${t}')">×</button></span>`;
+        hidden.innerHTML += `<input type="hidden" name="show_times" value="${t}">`;
+    });
+}
+
+// ── SUMMARY ────────────────────────────────────────────────
+function updateSummary() {
+    const box   = document.getElementById('summaryBox');
+    const movie = document.getElementById('movieSelect').options[document.getElementById('movieSelect').selectedIndex]?.text || '';
+    const n     = selectedDates.length * selectedTimes.length;
+    if (n === 0 || !movie || movie === 'Select a movie…') { box.style.display='none'; return; }
+    box.style.display = 'block';
+    box.innerHTML = `✅ Will create <strong>${n} showing(s)</strong> of <strong>${movie}</strong> — ${selectedDates.length} date(s) × ${selectedTimes.length} time(s).`;
+}
+document.getElementById('movieSelect').addEventListener('change', updateSummary);
+
+// ── VALIDATION ─────────────────────────────────────────────
+function validateAssign() {
+    if (!document.getElementById('movieSelect').value) { alert('Please select a movie.'); return false; }
+    if (selectedDates.length === 0) { alert('Please add at least one show date.'); return false; }
+    if (selectedTimes.length === 0) { alert('Please add at least one show time.'); return false; }
+    return true;
+}
+</script>
+</body>
+</html>

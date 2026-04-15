@@ -96,14 +96,18 @@
                                 <td style="font-weight:700;color:#4caf50;">{{ h.seat_count }}</td>
                                 <td>
                                     <div class="tbl-actions">
+                                        <a href="/admin/halls/{{ h.id }}/showings" class="tbl-btn"
+                                           style="background:rgba(76,175,80,.15);color:#4caf50;border:1px solid #4caf50;">
+                                            🎬 Showings
+                                        </a>
                                         <a href="/admin/halls/{{ h.id }}/editor" class="tbl-btn tbl-btn-edit">
-                                            ✏️ Edit Layout
+                                            ✏️ Layout
                                         </a>
                                         <form method="POST" action="/admin/halls/delete" style="display:inline;">
                                             <input type="hidden" name="hall_id" value="{{ h.id }}">
                                             <button type="submit" class="tbl-btn tbl-btn-delete"
                                                 onclick="return confirm('Delete hall {{ h.hall_name }}? This cannot be undone.')">
-                                                🗑️ Delete
+                                                🗑️
                                             </button>
                                         </form>
                                     </div>

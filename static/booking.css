@@ -337,6 +337,7 @@ body {
 .leg-box  { width: 16px; height: 16px; border-radius: 4px; }
 .l-avail    { background: #133513; border: 1px solid #4caf50; }
 .l-vip      { background: #111344; border: 1px solid #6666ff; }
+.l-pwd      { background: #001833; border: 1px solid #4db8ff; }
 .l-selected { background: #cc0000; border: 1px solid #ff4444; }
 .l-locked   { background: #2a2000; border: 1px solid #998800; }
 .l-booked   { background: #222; border: 1px solid #444; }
@@ -382,6 +383,10 @@ body {
 .seat-vip {
     background: #111344; color: #7777ff;
     border-color: #2a2a8a;
+}
+.seat-pwd {
+    background: #001833; color: #4db8ff;
+    border-color: #1a5c99;
 }
 .seat-selected {
     background: #cc0000; color: #fff;
