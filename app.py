@@ -13,7 +13,7 @@ except ImportError:
 #  APP CONFIG
 # ─────────────────────────────────────────────────────────────
 app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET_KEY")
+app.secret_key = 'tickit_very_secret_key_2025_change_in_prod'
 
 # ─────────────────────────────────────────────────────────────
 #  DATABASE CONFIG
@@ -43,6 +43,7 @@ def execute(db, sql, params=()):
 #  CONSTANTS
 # ─────────────────────────────────────────────────────────────
 TICKET_PRICES  = {'Regular': 450, 'Student': 350, 'Senior / PWD': 360}
+VIP_SURCHARGE  = 150  # added to base price for VIP seats
 ADMIN_EMAIL    = 'admin@gmail.com'
 ADMIN_PASSWORD = 'admin12345'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
@@ -55,11 +56,12 @@ PAY_FAILED_RATE  = 0.15
 # ─── PayMongo TEST MODE ───────────────────────────────────────────────────────
 # Replace these with your PayMongo TEST keys from https://dashboard.paymongo.com
 # Use TEST keys only — never commit live keys to source control.
-PAYMONGO_SECRET_KEY = os.getenv("PAYMONGO_SECRET_KEY")
-PAYMONGO_PUBLIC_KEY = os.getenv("PAYMONGO_PUBLIC_KEY")
+PAYMONGO_SECRET_KEY = ''
+PAYMONGO_PUBLIC_KEY = 'pk_test_1nfGmEUQPQKzvcQ2jeBzGBKC'
 PAYMONGO_BASE_URL   = 'https://api.paymongo.com/v1'
+USE_PAYMONGO        = (PAYMONGO_SECRET_KEY != 'sk_test_REPLACE_WITH_YOUR_TEST_KEY'
+                       and REQUESTS_AVAILABLE)
 
-USE_PAYMONGO = bool(PAYMONGO_SECRET_KEY) and REQUESTS_AVAILABLE
 
 def _paymongo_auth():
     return base64.b64encode(f'{PAYMONGO_SECRET_KEY}:'.encode()).decode()
@@ -195,6 +197,22 @@ def run_maintenance(db):
            AND status='Confirmed'
     """, (cutoff,))
     db.commit()
+
+def _seat_unit_price(seat_category, ticket_type, discount_status):
+    """
+    Pricing rules:
+    - Standard seats use base price (Regular/Student/Senior-PWD)
+    - VIP seats automatically add VIP_SURCHARGE
+    - Discounts apply only after verification is confirmed (discount_status == 'verified')
+      so pending/rejected discounts are charged at Regular rate.
+    """
+    base_type = ticket_type
+    if ticket_type in ('Student', 'Senior / PWD') and discount_status != 'verified':
+        base_type = 'Regular'
+    base = TICKET_PRICES.get(base_type, TICKET_PRICES['Regular'])
+    if str(seat_category).upper() == 'VIP':
+        return base + VIP_SURCHARGE
+    return base
 
 # ─────────────────────────────────────────────────────────────
 #  SEAT SEEDING
@@ -398,6 +416,8 @@ def booking():
         if selected_movie:
             raw_showings = query(db, """
                 SELECT s.id, s.show_date, s.show_time, s.status, s.total_seats,
+                       s.hall_id,
+                       h.hall_name,
                        c.name AS cinema_name, c.location AS cinema_location,
                        COALESCE(
                            (SELECT COUNT(*) FROM seats st
@@ -413,6 +433,7 @@ def booking():
                        ) AS total_seeded
                 FROM showings s
                 JOIN cinemas c ON c.id=s.cinema_id
+                LEFT JOIN cinema_halls h ON h.id=s.hall_id
                 WHERE s.movie_id=%s
                   AND s.status IN ('open','scheduled','full')
                   AND CONCAT(s.show_date,' ',s.show_time) > %s
@@ -453,12 +474,14 @@ def booking():
         ensure_seats(db, showing_id)
         row = query(db, """
             SELECT s.id, s.show_date, s.show_time, s.status AS show_status,
-                   s.total_seats,
+                   s.total_seats, s.hall_id,
                    c.name AS cinema_name, c.location AS cinema_location,
+                   h.hall_name,
                    m.title AS movie_title, m.genre, m.rating, m.poster_path,
                    m.id AS movie_id_val
             FROM showings s
             JOIN cinemas c ON c.id=s.cinema_id
+            LEFT JOIN cinema_halls h ON h.id=s.hall_id
             JOIN movies  m ON m.id=s.movie_id
             WHERE s.id=%s
         """, (showing_id,), one=True)
@@ -696,17 +719,28 @@ def confirm_booking():
                 db.close()
                 return redirect(url_for('booking', showing_id=showing_id))
 
-        unit_price  = TICKET_PRICES[ticket_type]
-        total_price = unit_price * len(seat_ids)
         ref_code    = 'TKT-' + uuid.uuid4().hex[:8].upper()
 
         discount_status = 'none'
         if ticket_type in ('Student', 'Senior / PWD'):
             discount_status = 'pending_verification'
 
+        # Price seats (VIP seats automatically cost more)
         placeholders = ','.join(['%s'] * len(seat_ids))
         seat_info = query(db,
-            f"SELECT seat_code, category FROM seats WHERE id IN ({placeholders})", seat_ids)
+            f"SELECT id, seat_code, category FROM seats WHERE id IN ({placeholders})", seat_ids)
+        seat_by_id = {s['id']: s for s in seat_info}
+
+        per_seat_prices = []
+        for sid in seat_ids:
+            srow = seat_by_id.get(sid)
+            if not srow:
+                flash('One of the selected seats is invalid. Please re-select.', 'error')
+                db.close()
+                return redirect(url_for('booking', showing_id=showing_id))
+            per_seat_prices.append(_seat_unit_price(srow.get('category'), ticket_type, discount_status))
+        total_price = sum(per_seat_prices)
+
         seat_codes_str = ', '.join(f"{s['seat_code']} ({s['category']})" for s in seat_info)
 
         sh_info = query(db, """
@@ -722,6 +756,8 @@ def confirm_booking():
                     ).strftime('%Y-%m-%d %H:%M:%S')
 
         for sid in seat_ids:
+            srow = seat_by_id.get(sid, {})
+            unit_price = _seat_unit_price(srow.get('category'), ticket_type, discount_status)
             execute(db, "UPDATE seats SET status='locked', locked_until=%s WHERE id=%s",
                     (lock_exp, sid))
             execute(db, """
@@ -779,6 +815,11 @@ def payment_checkout():
     if not booking:
         flash('Booking not found or already processed.', 'error')
         return redirect(url_for('booking'))
+
+    # If discount is selected but not yet verified, block online payment (walk-in verification first)
+    if booking.get('discount_status') == 'pending_verification':
+        flash('Discount verification required before payment. Please have staff/admin verify your Student/PWD discount first.', 'warning')
+        return redirect(url_for('my_bookings'))
 
     # If already paid, go straight to result
     if booking['payment_status'] == 'paid':
@@ -1782,7 +1823,25 @@ def admin_verify_approve():
     ref_code = request.form.get('ref_code', '').strip()
     if ref_code:
         db = get_db()
-        execute(db, "UPDATE bookings SET discount_status='verified' WHERE ref_code=%s", (ref_code,))
+        # Mark verified + recompute seat pricing (VIP surcharge still applies)
+        rows = query(db, """
+            SELECT b.seat_id, b.ticket_type, st.category
+            FROM bookings b
+            JOIN seats st ON st.id=b.seat_id
+            WHERE b.ref_code=%s
+        """, (ref_code,))
+        if rows:
+            ticket_type = rows[0]['ticket_type']
+            new_units = {r['seat_id']: _seat_unit_price(r['category'], ticket_type, 'verified') for r in rows}
+            new_total = sum(new_units.values())
+            for seat_id, up in new_units.items():
+                execute(db, """
+                    UPDATE bookings
+                    SET discount_status='verified', unit_price=%s, total_price=%s
+                    WHERE ref_code=%s AND seat_id=%s
+                """, (up, new_total, ref_code, seat_id))
+        else:
+            execute(db, "UPDATE bookings SET discount_status='verified' WHERE ref_code=%s", (ref_code,))
         db.commit(); db.close()
         flash(f'Discount for {ref_code} approved.', 'success')
     return redirect(url_for('admin_verifications'))
@@ -1793,11 +1852,25 @@ def admin_verify_reject():
     ref_code = request.form.get('ref_code', '').strip()
     if ref_code:
         db = get_db()
-        execute(db, """
-            UPDATE bookings SET discount_status='rejected', ticket_type='Regular',
-                                unit_price=%s, total_price=(ticket_count * %s)
-             WHERE ref_code=%s
-        """, (450, 450, ref_code))
+        # Reject discount: revert to Regular pricing (VIP surcharge still applies)
+        rows = query(db, """
+            SELECT b.seat_id, st.category
+            FROM bookings b
+            JOIN seats st ON st.id=b.seat_id
+            WHERE b.ref_code=%s
+        """, (ref_code,))
+        if rows:
+            new_units = {r['seat_id']: _seat_unit_price(r['category'], 'Regular', 'none') for r in rows}
+            new_total = sum(new_units.values())
+            for seat_id, up in new_units.items():
+                execute(db, """
+                    UPDATE bookings
+                    SET discount_status='rejected', ticket_type='Regular',
+                        unit_price=%s, total_price=%s
+                    WHERE ref_code=%s AND seat_id=%s
+                """, (up, new_total, ref_code, seat_id))
+        else:
+            execute(db, "UPDATE bookings SET discount_status='rejected', ticket_type='Regular' WHERE ref_code=%s", (ref_code,))
         db.commit(); db.close()
         flash(f'Discount for {ref_code} rejected.', 'warning')
     return redirect(url_for('admin_verifications'))
